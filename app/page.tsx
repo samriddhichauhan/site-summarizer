@@ -5,10 +5,13 @@ import { useEffect, useState } from "react";
 export default function Home() {
   const [url, setUrl] = useState("");
   const [result, setResult] = useState("");
+  const [content, setContent] = useState("");
   const [loading, setLoading] = useState(false);
   const [notes, setNotes] = useState<any[]>([]);
   const [title, setTitle] = useState("");
   const [selectedNote, setSelectedNote] = useState<any>(null);
+  const [viewMode, setViewMode] = useState<"summary" | "content">("summary");
+  const [searchTerm, setSearchTerm] = useState("");
 
   useEffect(() => {
     fetch("/api/notes")
@@ -16,6 +19,30 @@ export default function Home() {
       .then((data) => setNotes(data))
       .catch(() => setNotes([]));
   }, []);
+
+  async function deleteNote(noteUrl: string) {
+    await fetch("/api/delete-note", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        url: noteUrl,
+      }),
+    });
+
+    const notesRes = await fetch("/api/notes");
+    const notesData = await notesRes.json();
+
+    setNotes(notesData);
+
+    if (selectedNote?.url === noteUrl) {
+      setSelectedNote(null);
+      setTitle("");
+      setContent("");
+      setResult("");
+    }
+  }
 
   async function scrapeWebsite() {
     if (!url) return;
@@ -34,14 +61,17 @@ export default function Home() {
       const data = await res.json();
 
       setTitle(data.title || "");
+      setContent(data.content || "");
       setResult(data.summary || data.message || "No content returned.");
       setSelectedNote(null);
+      setViewMode("summary");
 
       const notesRes = await fetch("/api/notes");
       const notesData = await notesRes.json();
       setNotes(notesData);
     } catch (error) {
       setResult("Something went wrong while scraping the website.");
+      setContent("");
     } finally {
       setLoading(false);
     }
@@ -146,30 +176,58 @@ export default function Home() {
                 Saved Notes
               </h3>
 
-              <div className="max-h-80 space-y-2 overflow-auto">
-                {notes.map((note, index) => (
-                  <div
-                    key={index}
-                    onClick={() => {
-                      setSelectedNote(note);
-                      setTitle(note.title || "");
-                      setResult(note.summary || "");
-                    }}
-                    className={`cursor-pointer rounded-xl border p-3 transition hover:bg-white/5 ${
-                      selectedNote?.url === note.url
-                        ? "border-white/40 bg-white/5"
-                        : "border-white/10 bg-black/20"
-                    }`}
-                  >
-                    <p className="truncate text-xs text-white/40">
-                      {note.title || note.url}
-                    </p>
+              <input
+                type="text"
+                placeholder="Search notes..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="mb-3 h-12 w-full rounded-xl border border-white/10 bg-black/30 px-4 text-sm text-white placeholder:text-white/30 outline-none"
+              />
 
-                    <p className="mt-2 line-clamp-3 text-sm text-white/70">
-                      {note.summary}
-                    </p>
-                  </div>
-                ))}
+              <div className="max-h-80 space-y-2 overflow-auto">
+                {notes
+                  .filter((note) =>
+                    `${note.title || ""} ${note.url || ""}`
+                      .toLowerCase()
+                      .includes(searchTerm.toLowerCase())
+                  )
+                  .map((note, index) => (
+                    <div
+                      key={index}
+                      onClick={() => {
+                        setSelectedNote(note);
+                        setTitle(note.title || "");
+                        setContent(note.content || "");
+                        setResult(note.summary || "");
+                        setViewMode("summary");
+                      }}
+                      className={`cursor-pointer rounded-xl border p-3 transition hover:bg-white/5 ${
+                        selectedNote?.url === note.url
+                          ? "border-white/40 bg-white/5"
+                          : "border-white/10 bg-black/20"
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="truncate text-xs text-white/40">
+                          {note.title || note.url}
+                        </p>
+
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            deleteNote(note.url);
+                          }}
+                          className="shrink-0 text-red-400 transition hover:text-red-300"
+                        >
+                          ×
+                        </button>
+                      </div>
+
+                      <p className="mt-2 line-clamp-3 text-sm text-white/70">
+                        {note.summary}
+                      </p>
+                    </div>
+                  ))}
               </div>
             </div>
           </aside>
@@ -206,8 +264,32 @@ export default function Home() {
                       </div>
                     )}
 
+                    <div className="mb-4 flex gap-2">
+                      <button
+                        onClick={() => setViewMode("summary")}
+                        className={`rounded-xl px-4 py-2 text-sm transition ${
+                          viewMode === "summary"
+                            ? "bg-white text-black"
+                            : "border border-white/10 text-white"
+                        }`}
+                      >
+                        Summary
+                      </button>
+
+                      <button
+                        onClick={() => setViewMode("content")}
+                        className={`rounded-xl px-4 py-2 text-sm transition ${
+                          viewMode === "content"
+                            ? "bg-white text-black"
+                            : "border border-white/10 text-white"
+                        }`}
+                      >
+                        Full Content
+                      </button>
+                    </div>
+
                     <div className="max-w-3xl whitespace-pre-wrap text-[15px] leading-8 text-white/80">
-                      {result}
+                      {viewMode === "summary" ? result : content}
                     </div>
                   </div>
                 ) : (

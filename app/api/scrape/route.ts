@@ -27,10 +27,12 @@ export async function POST(req: Request) {
     const title = $("title").text().trim();
 
     let text = $("article").text() || $("main").text() || $("body").text();
-
     text = text.replace(/\s+/g, " ").trim();
 
-    const summary = text.slice(0, 1000);
+    const content = text;
+
+    const summary =
+      text.length > 1000 ? text.slice(0, 1000) + "..." : text;
 
     const dataDir = path.join(process.cwd(), "data");
     const filePath = path.join(dataDir, "notes.json");
@@ -52,6 +54,7 @@ export async function POST(req: Request) {
       notes.unshift({
         url,
         title,
+        content,
         summary,
         createdAt: new Date().toISOString(),
       });
@@ -62,6 +65,7 @@ export async function POST(req: Request) {
     return Response.json({
       success: true,
       title,
+      content,
       summary,
     });
   } catch (error) {
