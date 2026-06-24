@@ -1,5 +1,6 @@
 "use client";
 
+import jsPDF from "jspdf";
 import { useEffect, useState } from "react";
 
 type Note = {
@@ -61,6 +62,58 @@ export default function Home() {
     } catch (error) {
       console.error("Delete failed:", error);
     }
+  }
+
+  function exportPDF() {
+    if (!result) return;
+
+    const pdf = new jsPDF({
+      orientation: "p",
+      unit: "mm",
+      format: "a4",
+    });
+
+    const marginLeft = 14;
+    const marginTop = 20;
+    const maxWidth = 180;
+    const pageHeight = 297;
+    const bottomMargin = 18;
+
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(18);
+    pdf.text(title || "AI Summary", marginLeft, marginTop);
+
+    let y = marginTop + 10;
+
+    if (selectedNote?.url) {
+      pdf.setFont("helvetica", "normal");
+      pdf.setFontSize(10);
+      const urlLines = pdf.splitTextToSize(selectedNote.url, maxWidth);
+      pdf.text(urlLines, marginLeft, y);
+      y += urlLines.length * 5 + 4;
+    }
+
+    pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(11);
+
+    const lines = pdf.splitTextToSize(result, maxWidth);
+
+    for (const line of lines) {
+      if (y > pageHeight - bottomMargin) {
+        pdf.addPage();
+        y = 20;
+      }
+
+      pdf.text(line, marginLeft, y);
+      y += 6;
+    }
+
+    const safeFileName = `${title || "summary"}`
+      .replace(/[<>:"/\\|?*\x00-\x1F]/g, "")
+      .trim()
+      .replace(/\s+/g, "-");
+
+    pdf.save(`${safeFileName || "summary"}.pdf`);
   }
 
   async function scrapeWebsite() {
@@ -343,6 +396,14 @@ export default function Home() {
                         Full Content
                       </button>
 
+                      <button
+                        type="button"
+                        onClick={exportPDF}
+                        className="rounded-xl border border-white/10 px-4 py-2 text-sm text-white transition hover:bg-white/5"
+                      >
+                        Export PDF
+                      </button>
+
                       {viewMode === "summary" && (
                         <button
                           type="button"
@@ -356,7 +417,7 @@ export default function Home() {
 
                     <div className="mb-6 border-b border-white/10"></div>
 
-                    <div className="max-w-4xl text-[15px] leading-8 text-white/80">
+                    <div className="max-w-4xl whitespace-pre-wrap text-[15px] leading-8 text-white/80">
                       {viewMode === "summary" ? result : content}
                     </div>
                   </div>
