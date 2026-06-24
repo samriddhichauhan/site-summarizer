@@ -2,50 +2,69 @@
 
 import { useEffect, useState } from "react";
 
+type Note = {
+  url: string;
+  title: string;
+  summary: string;
+  content: string;
+  createdAt: string;
+};
+
 export default function Home() {
   const [url, setUrl] = useState("");
   const [result, setResult] = useState("");
   const [content, setContent] = useState("");
   const [loading, setLoading] = useState(false);
-  const [notes, setNotes] = useState<any[]>([]);
+  const [notes, setNotes] = useState<Note[]>([]);
   const [title, setTitle] = useState("");
-  const [selectedNote, setSelectedNote] = useState<any>(null);
+  const [selectedNote, setSelectedNote] = useState<Note | null>(null);
   const [viewMode, setViewMode] = useState<"summary" | "content">("summary");
   const [searchTerm, setSearchTerm] = useState("");
 
   useEffect(() => {
-    fetch("/api/notes")
-      .then((res) => res.json())
-      .then((data) => setNotes(data))
-      .catch(() => setNotes([]));
+    fetchNotes();
   }, []);
 
+  async function fetchNotes() {
+    try {
+      const res = await fetch("/api/notes");
+      const data = await res.json();
+      setNotes(Array.isArray(data) ? data : []);
+    } catch {
+      setNotes([]);
+    }
+  }
+
   async function deleteNote(noteUrl: string) {
-    await fetch("/api/delete-note", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        url: noteUrl,
-      }),
-    });
+    try {
+      const res = await fetch("/api/delete-note", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ url: noteUrl }),
+      });
 
-    const notesRes = await fetch("/api/notes");
-    const notesData = await notesRes.json();
+      const data = await res.json();
 
-    setNotes(notesData);
+      if (!res.ok || !data.success) return;
 
-    if (selectedNote?.url === noteUrl) {
-      setSelectedNote(null);
-      setTitle("");
-      setContent("");
-      setResult("");
+      await fetchNotes();
+
+      if (selectedNote?.url === noteUrl) {
+        setSelectedNote(null);
+        setTitle("");
+        setContent("");
+        setResult("");
+        setViewMode("summary");
+      }
+    } catch (error) {
+      console.error("Delete failed:", error);
     }
   }
 
   async function scrapeWebsite() {
-    if (!url) return;
+    if (!url.trim()) return;
 
     try {
       setLoading(true);
@@ -60,15 +79,25 @@ export default function Home() {
 
       const data = await res.json();
 
+      if (!res.ok || !data.success) {
+        setResult(data.message || "Something went wrong while scraping.");
+        setContent("");
+        return;
+      }
+
       setTitle(data.title || "");
       setContent(data.content || "");
-      setResult(data.summary || data.message || "No content returned.");
-      setSelectedNote(null);
+      setResult(data.summary || "No content returned.");
+      setSelectedNote({
+        url,
+        title: data.title || "",
+        content: data.content || "",
+        summary: data.summary || "",
+        createdAt: new Date().toISOString(),
+      });
       setViewMode("summary");
 
-      const notesRes = await fetch("/api/notes");
-      const notesData = await notesRes.json();
-      setNotes(notesData);
+      await fetchNotes();
     } catch (error) {
       setResult("Something went wrong while scraping the website.");
       setContent("");
@@ -77,6 +106,20 @@ export default function Home() {
     }
   }
 
+  async function copySummary() {
+    try {
+      await navigator.clipboard.writeText(result);
+    } catch (error) {
+      console.error("Copy failed:", error);
+    }
+  }
+
+  const filteredNotes = notes.filter((note) =>
+    `${note.title || ""} ${note.url || ""}`
+      .toLowerCase()
+      .includes(searchTerm.toLowerCase())
+  );
+
   return (
     <main className="min-h-screen bg-[#0a0a0b] text-white">
       <div className="mx-auto flex min-h-screen max-w-7xl flex-col px-6 py-6 lg:px-10 lg:py-8">
@@ -84,14 +127,14 @@ export default function Home() {
           <div>
             <div className="mb-2 flex items-center gap-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-sm font-semibold tracking-wide text-white/90">
-                WS
+                AI
               </div>
               <div>
                 <p className="text-[11px] uppercase tracking-[0.24em] text-white/40">
-                  Extraction Suite
+                  Powered by Ollama
                 </p>
                 <h1 className="text-xl font-semibold tracking-tight text-white">
-                  Website Scraper
+                  AI Site Summarizer
                 </h1>
               </div>
             </div>
@@ -110,11 +153,11 @@ export default function Home() {
                 Scrape source
               </p>
               <h2 className="text-2xl font-semibold tracking-tight text-white">
-                Turn any page into clean notes
+                Turn any page into AI notes
               </h2>
               <p className="mt-3 max-w-sm text-sm leading-6 text-white/55">
-                Paste a website URL, extract the content, and get a concise
-                summary in a workspace designed for focused reading.
+                Paste a website URL, extract the content, and get a structured
+                AI summary in a focused reading workspace.
               </p>
             </div>
 
@@ -137,10 +180,10 @@ export default function Home() {
 
               <button
                 onClick={scrapeWebsite}
-                disabled={loading || !url}
-                className="group inline-flex h-14 w-full items-center justify-center rounded-2xl bg-white px-4 text-sm font-semibold text-black transition hover:bg-white/90 disabled:cursor-not-allowed disabled:bg-white/20 disabled:text-white/40"
+                disabled={loading || !url.trim()}
+                className="inline-flex h-14 w-full items-center justify-center rounded-2xl bg-white px-4 text-sm font-semibold text-black transition hover:bg-white/90 disabled:cursor-not-allowed disabled:bg-white/20 disabled:text-white/40"
               >
-                {loading ? "Scraping content..." : "Start scraping"}
+                {loading ? "AI is analyzing..." : "Start scraping"}
               </button>
             </div>
 
@@ -158,7 +201,7 @@ export default function Home() {
                   Output
                 </p>
                 <p className="mt-2 text-sm font-medium text-white/85">
-                  Summary
+                  AI summary
                 </p>
               </div>
               <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
@@ -166,7 +209,7 @@ export default function Home() {
                   Notes
                 </p>
                 <p className="mt-2 text-sm font-medium text-white/85">
-                  Ready
+                  Saved
                 </p>
               </div>
             </div>
@@ -181,19 +224,14 @@ export default function Home() {
                 placeholder="Search notes..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="mb-3 h-12 w-full rounded-xl border border-white/10 bg-black/30 px-4 text-sm text-white placeholder:text-white/30 outline-none"
+                className="mb-3 h-12 w-full rounded-xl border border-white/10 bg-black/30 px-4 text-sm text-white placeholder:text-white/30 outline-none focus:border-white/20"
               />
 
-              <div className="max-h-80 space-y-2 overflow-auto">
-                {notes
-                  .filter((note) =>
-                    `${note.title || ""} ${note.url || ""}`
-                      .toLowerCase()
-                      .includes(searchTerm.toLowerCase())
-                  )
-                  .map((note, index) => (
+              <div className="max-h-80 space-y-2 overflow-auto pr-1">
+                {filteredNotes.length > 0 ? (
+                  filteredNotes.map((note, index) => (
                     <div
-                      key={index}
+                      key={`${note.url}-${index}`}
                       onClick={() => {
                         setSelectedNote(note);
                         setTitle(note.title || "");
@@ -208,11 +246,12 @@ export default function Home() {
                       }`}
                     >
                       <div className="flex items-start justify-between gap-2">
-                        <p className="truncate text-xs text-white/40">
+                        <p className="truncate text-sm text-white/80">
                           {note.title || note.url}
                         </p>
 
                         <button
+                          type="button"
                           onClick={(e) => {
                             e.stopPropagation();
                             deleteNote(note.url);
@@ -223,11 +262,16 @@ export default function Home() {
                         </button>
                       </div>
 
-                      <p className="mt-2 line-clamp-3 text-sm text-white/70">
-                        {note.summary}
+                      <p className="mt-1 text-xs text-white/40">
+                        {new Date(note.createdAt).toLocaleDateString()}
                       </p>
                     </div>
-                  ))}
+                  ))
+                ) : (
+                  <div className="rounded-xl border border-white/10 bg-black/20 p-4 text-sm text-white/45">
+                    No notes found.
+                  </div>
+                )}
               </div>
             </div>
           </aside>
@@ -253,19 +297,30 @@ export default function Home() {
                 {result ? (
                   <div>
                     {title && (
-                      <div className="mb-6">
+                      <div className="mb-4">
                         <p className="text-xs uppercase tracking-widest text-white/40">
                           Website Title
                         </p>
-
                         <h3 className="mt-2 text-2xl font-semibold text-white">
                           {title}
                         </h3>
+
+                        {selectedNote?.url && (
+                          <a
+                            href={selectedNote.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="mt-2 inline-block text-sm text-blue-400 hover:text-blue-300"
+                          >
+                            Open Original Website →
+                          </a>
+                        )}
                       </div>
                     )}
 
-                    <div className="mb-4 flex gap-2">
+                    <div className="mb-6 flex flex-wrap gap-2">
                       <button
+                        type="button"
                         onClick={() => setViewMode("summary")}
                         className={`rounded-xl px-4 py-2 text-sm transition ${
                           viewMode === "summary"
@@ -277,6 +332,7 @@ export default function Home() {
                       </button>
 
                       <button
+                        type="button"
                         onClick={() => setViewMode("content")}
                         className={`rounded-xl px-4 py-2 text-sm transition ${
                           viewMode === "content"
@@ -286,9 +342,21 @@ export default function Home() {
                       >
                         Full Content
                       </button>
+
+                      {viewMode === "summary" && (
+                        <button
+                          type="button"
+                          onClick={copySummary}
+                          className="rounded-xl border border-white/10 px-4 py-2 text-sm text-white transition hover:bg-white/5"
+                        >
+                          Copy Summary
+                        </button>
+                      )}
                     </div>
 
-                    <div className="max-w-3xl whitespace-pre-wrap text-[15px] leading-8 text-white/80">
+                    <div className="mb-6 border-b border-white/10"></div>
+
+                    <div className="max-w-4xl text-[15px] leading-8 text-white/80">
                       {viewMode === "summary" ? result : content}
                     </div>
                   </div>
@@ -306,7 +374,7 @@ export default function Home() {
 
                     <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.02] p-5">
                       <p className="text-sm font-medium text-white/75">
-                        Scraped content will appear here
+                        AI summary will appear here
                       </p>
                       <p className="mt-2 max-w-md text-sm leading-6 text-white/40">
                         Your extracted summary will be shown in a clean reading
