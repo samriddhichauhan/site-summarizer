@@ -1,0 +1,53 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Note {
+  id           Int         @id @default(autoincrement())
+  url          String      @unique
+  title        String
+  summary      String      
+  tldr         String?     
+  takeaways    String?     
+  keywords     String?     
+  difficulty   String?     
+  content      String
+  wordCount    Int         @default(0)
+  readingTime  Int         @default(1)
+  domainName   String?
+  articleImage String?
+  author       String?
+  publishedAt  DateTime?
+  isFavorite   Boolean     @default(false)
+  lastOpenedAt DateTime?
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @default(now()) @updatedAt
+  
+  collectionId Int?
+  collection   Collection? @relation(fields: [collectionId], references: [id], onDelete: SetNull)
+  tags         Tag[]       @relation("NoteToTag")
+}
+
+model Collection {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique
+  color       String?  @default("#6366f1")
+  icon        String?  @default("folder")
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @default(now()) @updatedAt
+  notes       Note[]
+}
+
+model Tag {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique
+  color     String?  @default("#8b5cf6")
+  createdAt DateTime @default(now())
+  notes     Note[]   @relation("NoteToTag")
+}

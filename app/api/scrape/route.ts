@@ -1,152 +1,102 @@
-import ollama from "ollama";
-import axios from "axios";
-import fs from "fs";
-import path from "path";
-import { JSDOM } from "jsdom";
-import { Readability } from "@mozilla/readability";
 import { NextResponse } from "next/server";
-
-type Note = {
-  url: string;
-  title: string;
-  content: string;
-  summary: string;
-  createdAt: string;
-};
+import { ScraperService } from "@/services/scraper.service";
+import { SummaryService } from "@/services/summary.service";
+import { NoteService } from "@/services/note.service";
 
 export async function POST(req: Request) {
   try {
     const body = await req.json();
     const url = body?.url?.trim();
+    const requestedModel = body?.model;
+    const collectionId = body?.collectionId ? Number(body.collectionId) : undefined;
+    const forceRescrape = body?.forceRescrape === true;
 
     if (!url) {
       return NextResponse.json(
-        {
-          success: false,
-          message: "URL is required",
-        },
+        { success: false, message: "URL is required." },
         { status: 400 }
       );
     }
 
-    const response = await axios.get(url, {
-      headers: {
-        "User-Agent":
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/125 Safari/537.36",
-      },
-      timeout: 30000,
-    });
+    // URL validation
+    try {
+      new URL(url);
+    } catch {
+      return NextResponse.json(
+        { success: false, message: "Please enter a valid URL." },
+        { status: 400 }
+      );
+    }
 
-    const dom = new JSDOM(response.data, { url });
-    const reader = new Readability(dom.window.document);
-    const article = reader.parse();
+    // Check existing note if not forcing rescrape
+    if (!forceRescrape) {
+      const existing = await NoteService.findByUrl(url);
+      if (existing) {
+        return NextResponse.json({
+          success: true,
+          cached: true,
+          note: existing,
+          message: "Retrieved saved article from your knowledge base.",
+        });
+      }
+    }
 
-    const title =
-      article?.title?.trim() ||
-      dom.window.document.title?.trim() ||
-      "Untitled";
-
-    const content = (article?.textContent || "No readable content found.")
-      .replace(/\s+/g, " ")
-      .trim();
-
-    const responseAI = await ollama.chat({
-      model: "llama3.2",
-      options: {
-        temperature: 0.2,
-      },
-      messages: [
+    // Scrape Webpage
+    const scrapeResult = await ScraperService.processUrl(url);
+    if (!scrapeResult.success || !scrapeResult.article) {
+      return NextResponse.json(
         {
-          role: "user",
-          content: `
-You are an expert research assistant.
-
-Summarize the webpage.
-
-Rules:
-- Do NOT repeat the article.
-- Do NOT include "Content:"
-- Maximum 250 words.
-- Return markdown.
-
-Format:
-
-# Main Topic
-
-One sentence.
-
-# Key Points
-
-- Point 1
-- Point 2
-- Point 3
-- Point 4
-
-# Important Takeaways
-
-Short paragraph.
-
-Article:
-${content.slice(0, 5000)}
-`,
+          success: false,
+          message: scrapeResult.error || "Could not extract article content from webpage.",
         },
-      ],
-    });
-
-    const summary =
-      responseAI?.message?.content?.trim() ||
-      (content.length > 1000 ? content.slice(0, 1000) + "..." : content);
-
-    const dataDir = path.join(process.cwd(), "data");
-    const filePath = path.join(dataDir, "notes.json");
-
-    if (!fs.existsSync(dataDir)) {
-      fs.mkdirSync(dataDir, { recursive: true });
+        { status: 422 }
+      );
     }
 
-    let notes: Note[] = [];
+    const article = scrapeResult.article;
 
-    if (fs.existsSync(filePath)) {
-      const fileContent = fs.readFileSync(filePath, "utf8");
-      notes = fileContent ? JSON.parse(fileContent) : [];
-    }
+    // Generate AI Summary
+    const aiResult = await SummaryService.summarize(
+      article.textContent,
+      article.title,
+      { model: requestedModel }
+    );
 
-    const existingIndex = notes.findIndex((note) => note.url === url);
-
-    const newNote: Note = {
+    // Save/Upsert in SQLite via Prisma
+    const note = await NoteService.upsertNote({
       url,
-      title,
-      content,
-      summary,
-      createdAt: new Date().toISOString(),
-    };
-
-    if (existingIndex !== -1) {
-      notes[existingIndex] = {
-        ...notes[existingIndex],
-        ...newNote,
-      };
-    } else {
-      notes.unshift(newNote);
-    }
-
-    fs.writeFileSync(filePath, JSON.stringify(notes, null, 2), "utf8");
+      title: article.title,
+      content: article.textContent,
+      summary: aiResult.summaryText,
+      tldr: aiResult.structured.tldr,
+      takeaways: aiResult.structured.takeaways,
+      keywords: aiResult.structured.keywords,
+      difficulty: aiResult.structured.difficulty,
+      wordCount: article.wordCount,
+      readingTime: article.readingTime,
+      domainName: article.domainName,
+      articleImage: article.articleImage,
+      author: article.byline,
+      collectionId,
+      tagNames: aiResult.structured.keywords.slice(0, 5),
+    });
 
     return NextResponse.json({
       success: true,
-      title,
-      content,
-      summary,
-      url,
-      createdAt: newNote.createdAt,
+      cached: false,
+      note,
+      isFallback: aiResult.isFallback,
+      modelUsed: aiResult.modelUsed,
+      message: aiResult.isFallback
+        ? "Article saved with rule-based fallback summary (Ollama model unavailable)."
+        : `Article scraped and summarized successfully using ${aiResult.modelUsed}.`,
     });
   } catch (error: any) {
-    console.error("SCRAPER ERROR:", error?.message);
-
+    console.error("Scrape API Error:", error);
     return NextResponse.json(
       {
         success: false,
-        message: error?.message || "Scraping failed",
+        message: error?.message || "An unexpected error occurred while processing the website.",
       },
       { status: 500 }
     );

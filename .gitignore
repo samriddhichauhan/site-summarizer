@@ -30,7 +30,7 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
+# env files
 .env*
 
 # vercel
@@ -39,5 +39,15 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
-data/notes.json
-data/notes.json
+
+# SQLite Database
+*.db
+*.db-journal
+dev.db
+prisma/dev.db
+
+# IDE & Agents
+.agents
+.claude
+.windsurf
+skills-lock.json

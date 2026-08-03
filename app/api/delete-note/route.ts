@@ -1,35 +1,32 @@
-import fs from "fs";
-import path from "path";
+import { NextResponse } from "next/server";
+import { NoteService } from "@/services/note.service";
 
 export async function POST(req: Request) {
   try {
-    const { url } = await req.json();
+    const { url, id } = await req.json();
 
-    const filePath = path.join(
-      process.cwd(),
-      "data",
-      "notes.json"
-    );
+    if (!url && !id) {
+      return NextResponse.json(
+        { success: false, message: "Note URL or ID is required." },
+        { status: 400 }
+      );
+    }
 
-    const notes = JSON.parse(
-      fs.readFileSync(filePath, "utf8")
-    );
+    const target = id ? Number(id) : url;
+    await NoteService.deleteNote(target);
 
-    const updatedNotes = notes.filter(
-      (note: any) => note.url !== url
-    );
-
-    fs.writeFileSync(
-      filePath,
-      JSON.stringify(updatedNotes, null, 2)
-    );
-
-    return Response.json({
+    return NextResponse.json({
       success: true,
+      message: "Note deleted successfully.",
     });
-  } catch {
-    return Response.json({
-      success: false,
-    });
+  } catch (error: any) {
+    console.error("Delete note error:", error);
+    return NextResponse.json(
+      {
+        success: false,
+        message: error?.message || "Failed to delete note.",
+      },
+      { status: 500 }
+    );
   }
 }
