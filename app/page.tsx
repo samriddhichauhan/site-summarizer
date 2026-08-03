@@ -9,6 +9,9 @@ import { NoteEditModal } from "@/components/notes/NoteEditModal";
 import { Workspace } from "@/components/reader/Workspace";
 import { ReaderMode } from "@/components/reader/ReaderMode";
 import { CollectionManager } from "@/components/collections/CollectionManager";
+import { DatasetBuilderModal } from "@/components/dataset/DatasetBuilderModal";
+import { DomainCrawlerModal } from "@/components/crawler/DomainCrawlerModal";
+import { StructuredExtractionModal } from "@/components/extraction/StructuredExtractionModal";
 import { ToastProvider, useToast } from "@/components/ui/Toast";
 import { NoteCardSkeleton } from "@/components/ui/Skeleton";
 import { Note } from "@/types/note";
@@ -25,6 +28,7 @@ function MainDashboard() {
 
   // Filter & Search State
   const [searchTerm, setSearchTerm] = useState("");
+  const [isSemantic, setIsSemantic] = useState(true);
   const [selectedCollectionId, setSelectedCollectionId] = useState<number | null>(null);
   const [onlyFavorites, setOnlyFavorites] = useState(false);
   const [sortBy, setSortBy] = useState("newest");
@@ -34,6 +38,9 @@ function MainDashboard() {
   const [isReaderModeOpen, setIsReaderModeOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isCollectionsModalOpen, setIsCollectionsModalOpen] = useState(false);
+  const [isDatasetBuilderOpen, setIsDatasetBuilderOpen] = useState(false);
+  const [isCrawlerModalOpen, setIsCrawlerModalOpen] = useState(false);
+  const [isStructuredExtractionOpen, setIsStructuredExtractionOpen] = useState(false);
   const [noteToEdit, setNoteToEdit] = useState<Note | null>(null);
 
   // Stats State
@@ -46,6 +53,7 @@ function MainDashboard() {
       setNotesLoading(true);
       const params = new URLSearchParams();
       if (searchTerm) params.append("search", searchTerm);
+      if (isSemantic) params.append("semantic", "true");
       if (selectedCollectionId) params.append("collectionId", String(selectedCollectionId));
       if (onlyFavorites) params.append("isFavorite", "true");
       if (sortBy) params.append("sortBy", sortBy);
@@ -64,7 +72,7 @@ function MainDashboard() {
     } finally {
       setNotesLoading(false);
     }
-  }, [searchTerm, selectedCollectionId, onlyFavorites, sortBy, selectedNote, toast]);
+  }, [searchTerm, isSemantic, selectedCollectionId, onlyFavorites, sortBy, selectedNote, toast]);
 
   const fetchCollections = useCallback(async () => {
     try {
@@ -124,7 +132,7 @@ function MainDashboard() {
 
       await fetchNotes();
       await fetchStats();
-    } catch (error) {
+    } catch {
       toast("Something went wrong while connecting to the server.", "error");
     } finally {
       setLoading(false);
@@ -246,6 +254,9 @@ function MainDashboard() {
           selectedModel={selectedModel}
           onModelChange={setSelectedModel}
           onOpenCollections={() => setIsCollectionsModalOpen(true)}
+          onOpenDatasetBuilder={() => setIsDatasetBuilderOpen(true)}
+          onOpenCrawler={() => setIsCrawlerModalOpen(true)}
+          onOpenStructuredExtraction={() => setIsStructuredExtractionOpen(true)}
         />
 
         {/* Stats Overview */}
@@ -332,6 +343,8 @@ function MainDashboard() {
               <FilterBar
                 searchTerm={searchTerm}
                 onSearchChange={setSearchTerm}
+                isSemantic={isSemantic}
+                onToggleSemantic={() => setIsSemantic(!isSemantic)}
                 selectedCollectionId={selectedCollectionId}
                 onCollectionChange={setSelectedCollectionId}
                 collections={collections}
@@ -413,6 +426,35 @@ function MainDashboard() {
         collections={collections}
         onCreateCollection={createCollection}
         onDeleteCollection={deleteCollection}
+      />
+
+      {/* Dataset Builder Modal */}
+      <DatasetBuilderModal
+        isOpen={isDatasetBuilderOpen}
+        onClose={() => setIsDatasetBuilderOpen(false)}
+        collections={collections}
+        onRefreshData={() => {
+          fetchNotes();
+          fetchStats();
+        }}
+      />
+
+      {/* Domain Web Crawler Modal */}
+      <DomainCrawlerModal
+        isOpen={isCrawlerModalOpen}
+        onClose={() => setIsCrawlerModalOpen(false)}
+        collections={collections}
+        onRefreshData={() => {
+          fetchNotes();
+          fetchStats();
+        }}
+      />
+
+      {/* AI Structured Extraction Modal */}
+      <StructuredExtractionModal
+        isOpen={isStructuredExtractionOpen}
+        onClose={() => setIsStructuredExtractionOpen(false)}
+        selectedModel={selectedModel}
       />
     </main>
   );

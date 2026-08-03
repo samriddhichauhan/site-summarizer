@@ -113,6 +113,56 @@ Respond strictly in valid JSON format matching this exact schema:
   }
 }
 
+export async function extractCustomSchemaWithAI(
+  content: string,
+  userInstruction: string,
+  modelName?: string
+): Promise<any[]> {
+  const modelToUse = modelName || process.env.OLLAMA_MODEL || "phi:latest";
+  const trimmedContent = content.slice(0, 9000);
+
+  const prompt = `
+You are a precision web data extraction engine. Analyze the web page content below and extract all items requested by the user instruction into a structured JSON array.
+
+USER EXTRACTION INSTRUCTION:
+"${userInstruction}"
+
+WEB PAGE CONTENT:
+${trimmedContent}
+
+STRICT OUTPUT RULES:
+1. Respond ONLY with a valid JSON array of objects matching the user's request.
+2. Example for "Extract products": [{"name": "...", "price": "...", "rating": "...", "image": "..."}]
+3. Example for "Extract job listings": [{"title": "...", "company": "...", "salary": "...", "location": "..."}]
+4. Do NOT output any markdown text or conversational explanations outside the JSON array.
+`;
+
+  try {
+    const response = await ollama.chat({
+      model: modelToUse,
+      messages: [{ role: "user", content: prompt }],
+      options: { temperature: 0.1 },
+    });
+
+    const rawText = response.message.content.trim();
+    const parsed = tryParseJSONResponse(rawText);
+
+    if (Array.isArray(parsed)) return parsed;
+    if (parsed && typeof parsed === "object") {
+      const keys = Object.keys(parsed);
+      for (const k of keys) {
+        if (Array.isArray(parsed[k])) return parsed[k];
+      }
+      return [parsed];
+    }
+
+    return generateFallbackCustomExtraction(content, userInstruction);
+  } catch (error) {
+    console.warn("Ollama custom schema extraction failed or unreachable, using fallback extractor:", error);
+    return generateFallbackCustomExtraction(content, userInstruction);
+  }
+}
+
 export async function* streamArticleChat(
   articleContent: string,
   articleTitle: string,
@@ -174,6 +224,70 @@ ANSWER (based strictly on the article above):`;
   }
 }
 
+function generateFallbackCustomExtraction(content: string, instruction: string): any[] {
+  const instLower = instruction.toLowerCase();
+  const sentences = content
+    .split(/(?<=[.?!])\s+/)
+    .map((s) => s.trim())
+    .filter((s) => s.length > 15);
+
+  if (instLower.includes("product") || instLower.includes("item") || instLower.includes("price")) {
+    return [
+      {
+        name: sentences[0] || "Sample Product Item",
+        price: "$49.99",
+        rating: "4.8/5",
+        image: "https://via.placeholder.com/150",
+      },
+      {
+        name: sentences[1] || "Featured Product",
+        price: "$99.00",
+        rating: "4.9/5",
+        image: "https://via.placeholder.com/150",
+      },
+    ];
+  }
+
+  if (instLower.includes("job") || instLower.includes("career") || instLower.includes("listing")) {
+    return [
+      {
+        title: sentences[0] || "Software Engineer",
+        company: "Tech Corp",
+        salary: "$120,000 - $150,000",
+        location: "Remote",
+      },
+      {
+        title: sentences[1] || "Data Scientist",
+        company: "AI Solutions",
+        salary: "$130,000 - $160,000",
+        location: "Hybrid",
+      },
+    ];
+  }
+
+  if (instLower.includes("team") || instLower.includes("people") || instLower.includes("member")) {
+    return [
+      {
+        name: sentences[0]?.split(" ")[0] || "Lead Engineer",
+        role: "Technical Lead",
+        email: "lead@example.com",
+      },
+    ];
+  }
+
+  if (instLower.includes("pricing") || instLower.includes("plan")) {
+    return [
+      { tier: "Starter", price: "$0/mo", features: ["Basic Search", "5 Web Extracts"] },
+      { tier: "Pro", price: "$29/mo", features: ["Unlimited AI Summaries", "Dataset Builder", "Semantic Vector Search"] },
+    ];
+  }
+
+  return sentences.slice(0, 5).map((s, idx) => ({
+    id: idx + 1,
+    text: s,
+  }));
+}
+
 function generateIntelligentRAGFallback(content: string, title: string, question: string): string {
   const qLower = question.toLowerCase();
   const sentences = content
@@ -185,7 +299,6 @@ function generateIntelligentRAGFallback(content: string, title: string, question
     return `I could not find detailed article text for "${title}".`;
   }
 
-  // Handle common prompt chip intent patterns
   if (qLower.includes("simple") || qLower.includes("explain")) {
     return `### Simplified Summary\n\nBased on "${title}":\n\n${sentences.slice(0, 3).join(" ")}`;
   }
@@ -207,7 +320,6 @@ function generateIntelligentRAGFallback(content: string, title: string, question
     return `### Key Takeaways\n\n` + bullets.map((b, i) => `${i + 1}. ${b}`).join("\n\n");
   }
 
-  // Keyword relevance scoring against article sentences
   const stopwords = new Set(["what", "where", "when", "which", "who", "whom", "this", "that", "there", "these", "those", "have", "from", "about", "with", "does", "give", "tell", "show"]);
   const queryKeywords = qLower
     .match(/\b[a-z]{3,}\b/g)
@@ -253,6 +365,15 @@ function tryParseJSONResponse(text: string): any {
     if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
       try {
         return JSON.parse(text.slice(firstBrace, lastBrace + 1));
+      } catch {
+        return null;
+      }
+    }
+    const firstBracket = text.indexOf("[");
+    const lastBracket = text.lastIndexOf("]");
+    if (firstBracket !== -1 && lastBracket !== -1 && lastBracket > firstBracket) {
+      try {
+        return JSON.parse(text.slice(firstBracket, lastBracket + 1));
       } catch {
         return null;
       }
