@@ -1,5 +1,6 @@
 import { Collection } from "./collection";
 import { Tag } from "./tag";
+import { ExtractedSmartData } from "./scraper";
 
 export type DifficultyLevel = "Beginner" | "Intermediate" | "Advanced";
 
@@ -21,6 +22,8 @@ export interface Note {
   publishedAt?: string | Date | null;
   isFavorite: boolean;
   lastOpenedAt?: string | Date | null;
+  embedding?: string | null;
+  extractedData?: string | null; // JSON stringified ExtractedSmartData
   createdAt: string | Date;
   updatedAt: string | Date;
   collectionId?: number | null;
@@ -55,6 +58,7 @@ export interface NoteCreateInput {
   publishedAt?: Date;
   collectionId?: number;
   tagNames?: string[];
+  extractedData?: ExtractedSmartData;
 }
 
 export interface NoteUpdateInput {
@@ -75,5 +79,6 @@ export interface NoteFilter {
   tag?: string;
   isFavorite?: boolean;
   difficulty?: string;
+  isSemantic?: boolean;
   sortBy?: "newest" | "oldest" | "title" | "readingTime";
 }

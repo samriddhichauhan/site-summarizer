@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import { Note } from "@/types/note";
-import { generatePDF, generateMarkdown, downloadFile, parseJsonArray } from "@/lib/utils";
+import { generatePDF, generateMarkdown, generateCSV, generateJSONL, downloadFile, parseJsonArray } from "@/lib/utils";
 import { useToast } from "../ui/Toast";
 import { ChatPanel } from "../chat/ChatPanel";
 
@@ -21,7 +21,7 @@ export function Workspace({
   onOpenReaderMode,
   onEditNote,
 }: WorkspaceProps) {
-  const [viewMode, setViewMode] = useState<"summary" | "content" | "chat">("summary");
+  const [viewMode, setViewMode] = useState<"summary" | "content" | "chat" | "smartData">("summary");
   const { toast } = useToast();
 
   if (loading) {
@@ -35,7 +35,7 @@ export function Workspace({
           <div className="h-4 w-4/6 rounded-xl bg-white/5 animate-pulse" />
         </div>
         <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.02] p-6 text-center text-white/40">
-          AI is analyzing website content and generating structured summary...
+          Extracting DOM schema, headings, tables, metadata, and AI structured summary...
         </div>
       </div>
     );
@@ -45,11 +45,11 @@ export function Workspace({
     return (
       <div className="rounded-3xl border border-white/10 bg-[#0f1117] p-8 shadow-2xl min-h-[500px] flex flex-col items-center justify-center text-center">
         <div className="flex h-16 w-16 items-center justify-center rounded-3xl border border-white/10 bg-white/5 text-[11px] font-bold text-white/40 uppercase mb-4">
-          Empty
+          Data
         </div>
-        <h3 className="text-xl font-bold text-white tracking-tight">Summary Workspace</h3>
+        <h3 className="text-xl font-bold text-white tracking-tight">Smart Data Extraction Workspace</h3>
         <p className="mt-2 max-w-md text-sm text-white/50 leading-relaxed">
-          Paste any website URL in the left sidebar to extract clean article text, generate a structured AI summary, and chat interactively with the article.
+          Scrape any website URL to extract title, headings, tables, images, links, metadata, contact details, social profiles, and LLM text.
         </p>
       </div>
     );
@@ -57,6 +57,15 @@ export function Workspace({
 
   const takeaways = parseJsonArray(note.takeaways);
   const keywords = parseJsonArray(note.keywords);
+
+  let parsedSmartData: any = null;
+  if (note.extractedData) {
+    try {
+      parsedSmartData = JSON.parse(note.extractedData);
+    } catch {
+      parsedSmartData = null;
+    }
+  }
 
   function handleCopySummary() {
     try {
@@ -67,11 +76,20 @@ export function Workspace({
     }
   }
 
+  function handleCopySmartData() {
+    try {
+      navigator.clipboard.writeText(JSON.stringify(parsedSmartData || note, null, 2));
+      toast("Smart Data JSON copied to clipboard!", "success");
+    } catch {
+      toast("Failed to copy JSON.", "error");
+    }
+  }
+
   function handleExportPDF() {
     try {
       generatePDF(note!);
       toast("PDF downloaded successfully!", "success");
-    } catch (err) {
+    } catch {
       toast("PDF export failed.", "error");
     }
   }
@@ -83,7 +101,7 @@ export function Workspace({
         .replace(/[<>:"/\\|?*]/g, "")
         .replace(/\s+/g, "-");
       downloadFile(`${safeTitle}.md`, md, "text/markdown");
-      toast("Markdown file downloaded!", "success");
+      toast("Markdown downloaded!", "success");
     } catch {
       toast("Markdown download failed.", "error");
     }
@@ -91,14 +109,36 @@ export function Workspace({
 
   function handleExportJSON() {
     try {
-      const jsonStr = JSON.stringify(note, null, 2);
-      const safeTitle = (note!.title || "note")
+      const jsonStr = JSON.stringify(parsedSmartData || note, null, 2);
+      const safeTitle = (note!.title || "smart-data")
         .replace(/[<>:"/\\|?*]/g, "")
         .replace(/\s+/g, "-");
       downloadFile(`${safeTitle}.json`, jsonStr, "application/json");
-      toast("JSON exported!", "success");
+      toast("Structured JSON exported!", "success");
     } catch {
       toast("JSON export failed.", "error");
+    }
+  }
+
+  function handleExportCSV() {
+    try {
+      const csvStr = generateCSV([note!]);
+      const safeTitle = (note!.title || "data").replace(/[<>:"/\\|?*]/g, "").replace(/\s+/g, "-");
+      downloadFile(`${safeTitle}.csv`, csvStr, "text/csv");
+      toast("CSV Dataset exported!", "success");
+    } catch {
+      toast("CSV export failed.", "error");
+    }
+  }
+
+  function handleExportJSONL() {
+    try {
+      const jsonlStr = generateJSONL([note!]);
+      const safeTitle = (note!.title || "finetune").replace(/[<>:"/\\|?*]/g, "").replace(/\s+/g, "-");
+      downloadFile(`${safeTitle}.jsonl`, jsonlStr, "application/jsonl");
+      toast("LLM Fine-tuning JSONL dataset exported!", "success");
+    } catch {
+      toast("JSONL export failed.", "error");
     }
   }
 
@@ -174,10 +214,10 @@ export function Workspace({
 
         {/* View Switcher Tabs & Actions Toolbar */}
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <button
               onClick={() => setViewMode("summary")}
-              className={`rounded-xl px-4 py-2 text-xs font-semibold transition ${
+              className={`rounded-xl px-3.5 py-2 text-xs font-semibold transition ${
                 viewMode === "summary"
                   ? "bg-white text-black shadow-lg"
                   : "border border-white/10 text-white/70 hover:bg-white/5"
@@ -186,18 +226,28 @@ export function Workspace({
               Structured Summary
             </button>
             <button
+              onClick={() => setViewMode("smartData")}
+              className={`rounded-xl px-3.5 py-2 text-xs font-semibold transition ${
+                viewMode === "smartData"
+                  ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/30"
+                  : "border border-white/10 text-white/70 hover:bg-white/5"
+              }`}
+            >
+              Smart Data Schema
+            </button>
+            <button
               onClick={() => setViewMode("content")}
-              className={`rounded-xl px-4 py-2 text-xs font-semibold transition ${
+              className={`rounded-xl px-3.5 py-2 text-xs font-semibold transition ${
                 viewMode === "content"
                   ? "bg-white text-black shadow-lg"
                   : "border border-white/10 text-white/70 hover:bg-white/5"
               }`}
             >
-              Full Article Content
+              Clean Text
             </button>
             <button
               onClick={() => setViewMode("chat")}
-              className={`rounded-xl px-4 py-2 text-xs font-semibold transition ${
+              className={`rounded-xl px-3.5 py-2 text-xs font-semibold transition ${
                 viewMode === "chat"
                   ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/30"
                   : "border border-white/10 text-white/70 hover:bg-white/5"
@@ -207,7 +257,7 @@ export function Workspace({
             </button>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-1.5">
             <button
               onClick={handleCopySummary}
               className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-1.5 text-xs font-medium text-white hover:bg-white/10 transition"
@@ -234,6 +284,18 @@ export function Workspace({
               .JSON
             </button>
             <button
+              onClick={handleExportCSV}
+              className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-1.5 text-xs font-medium text-white hover:bg-white/10 transition"
+            >
+              .CSV
+            </button>
+            <button
+              onClick={handleExportJSONL}
+              className="rounded-xl border border-indigo-500/30 bg-indigo-950/40 px-3 py-1.5 text-xs font-semibold text-indigo-300 hover:bg-indigo-900/50 transition"
+            >
+              .JSONL
+            </button>
+            <button
               onClick={handleShare}
               className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-1.5 text-xs font-medium text-white hover:bg-white/10 transition"
             >
@@ -245,6 +307,44 @@ export function Workspace({
         {/* Content Body View */}
         {viewMode === "chat" ? (
           <ChatPanel note={note} selectedModel={selectedModel} />
+        ) : viewMode === "smartData" ? (
+          <div className="rounded-2xl border border-white/10 bg-black/50 p-5 space-y-4">
+            <div className="flex items-center justify-between border-b border-white/10 pb-3">
+              <div>
+                <h4 className="text-xs font-bold uppercase tracking-wider text-indigo-400">
+                  Extracted Smart Data Schema
+                </h4>
+                <p className="text-[11px] text-white/50">
+                  Headings, tables, images, links, metadata, contact info, code blocks, and FAQs.
+                </p>
+              </div>
+
+              <button
+                onClick={handleCopySmartData}
+                className="rounded-xl border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-white hover:bg-white/10 transition"
+              >
+                Copy Raw JSON
+              </button>
+            </div>
+
+            <pre className="whitespace-pre-wrap font-mono text-[11px] leading-relaxed text-emerald-400/90 max-h-[450px] overflow-y-auto pr-2 bg-black/40 p-4 rounded-xl border border-white/5">
+              {JSON.stringify(
+                parsedSmartData || {
+                  title: note.title,
+                  url: note.url,
+                  domain: note.domainName,
+                  wordCount: note.wordCount,
+                  readingTime: note.readingTime,
+                  tldr: note.tldr,
+                  summary: note.summary,
+                  takeaways: takeaways,
+                  keywords: keywords,
+                },
+                null,
+                2
+              )}
+            </pre>
+          </div>
         ) : (
           <div className="rounded-2xl border border-white/10 bg-black/30 p-6 min-h-[300px]">
             {viewMode === "summary" ? (

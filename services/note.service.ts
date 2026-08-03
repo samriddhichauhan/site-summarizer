@@ -1,10 +1,17 @@
 import { prisma } from "@/lib/prisma";
 import { NoteCreateInput, NoteFilter, NoteUpdateInput } from "@/types/note";
+import { generateEmbedding, cosineSimilarity } from "@/lib/embeddings";
 
 export class NoteService {
   static async upsertNote(data: NoteCreateInput) {
     const jsonTakeaways = data.takeaways ? JSON.stringify(data.takeaways) : null;
     const jsonKeywords = data.keywords ? JSON.stringify(data.keywords) : null;
+    const jsonExtractedData = data.extractedData ? JSON.stringify(data.extractedData) : null;
+
+    // Generate vector embedding for title + summary + content
+    const textToEmbed = `${data.title} ${data.summary || ""} ${data.tldr || ""} ${data.content.slice(0, 2000)}`;
+    const embeddingVector = await generateEmbedding(textToEmbed);
+    const jsonEmbedding = embeddingVector.length > 0 ? JSON.stringify(embeddingVector) : null;
 
     // Check if tag objects exist or connect/create them
     const tagConnectOrCreate = data.tagNames
@@ -31,6 +38,8 @@ export class NoteService {
         author: data.author,
         publishedAt: data.publishedAt,
         collectionId: data.collectionId,
+        embedding: jsonEmbedding,
+        extractedData: jsonExtractedData,
         tags: {
           connectOrCreate: tagConnectOrCreate,
         },
@@ -51,6 +60,8 @@ export class NoteService {
         author: data.author,
         publishedAt: data.publishedAt,
         collectionId: data.collectionId,
+        embedding: jsonEmbedding,
+        extractedData: jsonExtractedData,
         tags: {
           connectOrCreate: tagConnectOrCreate,
         },
@@ -73,7 +84,6 @@ export class NoteService {
   }
 
   static async findById(id: number) {
-    // Also update lastOpenedAt when fetching individual note
     const note = await prisma.note.findUnique({
       where: { id },
       include: {
@@ -95,18 +105,6 @@ export class NoteService {
   static async getAllNotes(filter: NoteFilter = {}) {
     const where: any = {};
 
-    if (filter.search?.trim()) {
-      const q = filter.search.trim();
-      where.OR = [
-        { title: { contains: q } },
-        { summary: { contains: q } },
-        { content: { contains: q } },
-        { url: { contains: q } },
-        { domainName: { contains: q } },
-        { keywords: { contains: q } },
-      ];
-    }
-
     if (filter.collectionId) {
       where.collectionId = filter.collectionId;
     }
@@ -127,6 +125,19 @@ export class NoteService {
       };
     }
 
+    // Standard Keyword Search Mode
+    if (filter.search?.trim() && !filter.isSemantic) {
+      const q = filter.search.trim();
+      where.OR = [
+        { title: { contains: q } },
+        { summary: { contains: q } },
+        { content: { contains: q } },
+        { url: { contains: q } },
+        { domainName: { contains: q } },
+        { keywords: { contains: q } },
+      ];
+    }
+
     let orderBy: any = { createdAt: "desc" };
     if (filter.sortBy === "oldest") {
       orderBy = { createdAt: "asc" };
@@ -136,14 +147,57 @@ export class NoteService {
       orderBy = { readingTime: "desc" };
     }
 
-    return await prisma.note.findMany({
+    const notes = await prisma.note.findMany({
       where,
-      orderBy,
+      orderBy: filter.isSemantic && filter.search?.trim() ? undefined : orderBy,
       include: {
         collection: true,
         tags: true,
       },
     });
+
+    // Semantic Vector Search Mode
+    if (filter.search?.trim() && filter.isSemantic) {
+      const queryText = filter.search.trim();
+      const queryVector = await generateEmbedding(queryText);
+
+      // Score notes using Cosine Similarity against query vector
+      const scoredNotes = await Promise.all(
+        notes.map(async (note) => {
+          let vec: number[] = [];
+          if (note.embedding) {
+            try {
+              vec = JSON.parse(note.embedding);
+            } catch {
+              vec = [];
+            }
+          }
+
+          if (vec.length === 0) {
+            const textToEmbed = `${note.title} ${note.summary || ""} ${note.content.slice(0, 1500)}`;
+            vec = await generateEmbedding(textToEmbed);
+            // Cache on database
+            if (vec.length > 0) {
+              await prisma.note.update({
+                where: { id: note.id },
+                data: { embedding: JSON.stringify(vec) },
+              });
+            }
+          }
+
+          const score = cosineSimilarity(queryVector, vec);
+          return { note, score };
+        })
+      );
+
+      // Filter out low relevance notes and sort by similarity score descending
+      return scoredNotes
+        .filter((item) => item.score > 0.05)
+        .sort((a, b) => b.score - a.score)
+        .map((item) => item.note);
+    }
+
+    return notes;
   }
 
   static async updateNote(id: number, data: NoteUpdateInput) {

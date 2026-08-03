@@ -24,6 +24,7 @@ export async function GET(req: Request) {
         : undefined;
 
     const difficulty = searchParams.get("difficulty") || undefined;
+    const isSemantic = searchParams.get("semantic") === "true";
     const sortBy = (searchParams.get("sortBy") as any) || "newest";
 
     const notes = await NoteService.getAllNotes({
@@ -32,6 +33,7 @@ export async function GET(req: Request) {
       tag,
       isFavorite,
       difficulty,
+      isSemantic,
       sortBy,
     });
 

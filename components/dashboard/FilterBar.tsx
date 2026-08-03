@@ -6,6 +6,8 @@ import { Collection } from "@/types/collection";
 interface FilterBarProps {
   searchTerm: string;
   onSearchChange: (value: string) => void;
+  isSemantic: boolean;
+  onToggleSemantic: () => void;
   selectedCollectionId: number | null;
   onCollectionChange: (id: number | null) => void;
   collections: Collection[];
@@ -18,6 +20,8 @@ interface FilterBarProps {
 export function FilterBar({
   searchTerm,
   onSearchChange,
+  isSemantic,
+  onToggleSemantic,
   selectedCollectionId,
   onCollectionChange,
   collections,
@@ -28,19 +32,27 @@ export function FilterBar({
 }: FilterBarProps) {
   return (
     <div className="mb-4 space-y-3">
-      {/* Search Input */}
-      <div className="relative">
+      {/* Search Input Container */}
+      <div className="relative flex items-center">
         <input
           type="text"
-          placeholder="Search articles by title, content, or tag..."
+          placeholder={
+            isSemantic
+              ? "Semantic AI Search (e.g. 'AI' matches 'Machine Learning', 'LLMs')..."
+              : "Search articles by title, content, or tag..."
+          }
           value={searchTerm}
           onChange={(e) => onSearchChange(e.target.value)}
-          className="h-11 w-full rounded-2xl border border-white/10 bg-black/40 px-4 text-sm text-white placeholder:text-white/30 outline-none transition focus:border-indigo-500/50 focus:bg-black/60"
+          className={`h-11 w-full rounded-2xl border bg-black/40 px-4 text-xs text-white placeholder:text-white/30 outline-none transition ${
+            isSemantic
+              ? "border-indigo-500/60 focus:border-indigo-400 focus:bg-black/60 shadow-lg shadow-indigo-500/10"
+              : "border-white/10 focus:border-indigo-500/50 focus:bg-black/60"
+          }`}
         />
         {searchTerm && (
           <button
             onClick={() => onSearchChange("")}
-            className="absolute right-3 top-2.5 text-xs text-white/40 hover:text-white"
+            className="absolute right-3 text-xs text-white/40 hover:text-white"
           >
             Clear
           </button>
@@ -50,6 +62,20 @@ export function FilterBar({
       {/* Filter Controls Row */}
       <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
         <div className="flex flex-wrap items-center gap-2">
+          {/* Semantic Search Toggle Button */}
+          <button
+            onClick={onToggleSemantic}
+            className={`flex items-center gap-1.5 rounded-xl border px-3 py-1.5 font-medium transition ${
+              isSemantic
+                ? "border-indigo-500/50 bg-indigo-500/20 text-indigo-300 shadow-md shadow-indigo-500/20"
+                : "border-white/10 bg-white/[0.02] text-white/60 hover:bg-white/5 hover:text-white"
+            }`}
+            title="Semantic vector search finds conceptually related articles (e.g. 'AI' finds 'LLMs' & 'Neural Networks')"
+          >
+            <span className={`h-2 w-2 rounded-full ${isSemantic ? "bg-indigo-400 animate-pulse" : "bg-white/30"}`} />
+            Semantic Vector Search
+          </button>
+
           {/* Favorites Filter Toggle */}
           <button
             onClick={onToggleFavorites}

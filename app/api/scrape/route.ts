@@ -79,6 +79,7 @@ export async function POST(req: Request) {
       author: article.byline,
       collectionId,
       tagNames: aiResult.structured.keywords.slice(0, 5),
+      extractedData: article.smartData,
     });
 
     return NextResponse.json({

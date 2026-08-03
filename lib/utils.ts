@@ -128,7 +128,16 @@ export function generateMarkdown(note: Partial<Note>): string {
     : [];
   const keywords = note.keywords ? parseJsonArray(note.keywords) : [];
 
-  let md = `# ${title}\n\n`;
+  let md = `---
+title: "${title.replace(/"/g, '\\"')}"
+url: "${url}"
+domain: "${note.domainName || "web"}"
+reading_time_min: ${note.readingTime || 1}
+difficulty: "${note.difficulty || "Intermediate"}"
+created_at: "${note.createdAt || new Date().toISOString()}"
+---\n\n`;
+
+  md += `# ${title}\n\n`;
   md += `- **Source:** ${url}\n`;
   md += `- **Domain:** ${note.domainName || "Web"}\n`;
   md += `- **Reading Time:** ${note.readingTime || 1} min\n`;
@@ -151,8 +160,132 @@ export function generateMarkdown(note: Partial<Note>): string {
     md += `**Keywords:** ${keywords.map((k) => `\`${k}\``).join(", ")}\n\n`;
   }
 
-  md += `---\n*Generated with AI Knowledge Management Platform*\n`;
+  md += `---\n*Generated with AI Web Data Pipeline*\n`;
   return md;
+}
+
+export function generateCSV(notes: Note[]): string {
+  const headers = ["ID", "Title", "URL", "Domain", "ReadingTime", "Difficulty", "TLDR", "Summary", "CreatedAt"];
+  const escapeCsv = (str: string | null | undefined) => {
+    if (!str) return '""';
+    const escaped = String(str).replace(/"/g, '""');
+    return `"${escaped}"`;
+  };
+
+  const rows = notes.map((n) => [
+    n.id,
+    escapeCsv(n.title),
+    escapeCsv(n.url),
+    escapeCsv(n.domainName),
+    n.readingTime,
+    escapeCsv(n.difficulty),
+    escapeCsv(n.tldr),
+    escapeCsv(n.summary),
+    escapeCsv(String(n.createdAt)),
+  ]);
+
+  return [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
+}
+
+export function generateExcelCSV(notes: Note[]): string {
+  // UTF-8 BOM prefix for Excel compatibility
+  const BOM = "\uFEFF";
+  return BOM + generateCSV(notes);
+}
+
+export function generateSQL(notes: Note[]): string {
+  const escapeSql = (str: string | null | undefined) => {
+    if (!str) return "NULL";
+    const escaped = String(str).replace(/'/g, "''");
+    return `'${escaped}'`;
+  };
+
+  let sql = `-- AI Web Data Pipeline SQL Export\n`;
+  sql += `-- Target Table: articles\n`;
+  sql += `CREATE TABLE IF NOT EXISTS articles (\n`;
+  sql += `  id INT PRIMARY KEY,\n`;
+  sql += `  url VARCHAR(2048) UNIQUE,\n`;
+  sql += `  title VARCHAR(512),\n`;
+  sql += `  domain VARCHAR(256),\n`;
+  sql += `  word_count INT,\n`;
+  sql += `  reading_time INT,\n`;
+  sql += `  difficulty VARCHAR(64),\n`;
+  sql += `  tldr TEXT,\n`;
+  sql += `  summary TEXT,\n`;
+  sql += `  created_at TIMESTAMP\n`;
+  sql += `);\n\n`;
+
+  notes.forEach((n) => {
+    sql += `INSERT INTO articles (id, url, title, domain, word_count, reading_time, difficulty, tldr, summary, created_at) VALUES (\n`;
+    sql += `  ${n.id},\n`;
+    sql += `  ${escapeSql(n.url)},\n`;
+    sql += `  ${escapeSql(n.title)},\n`;
+    sql += `  ${escapeSql(n.domainName)},\n`;
+    sql += `  ${n.wordCount || 0},\n`;
+    sql += `  ${n.readingTime || 1},\n`;
+    sql += `  ${escapeSql(n.difficulty)},\n`;
+    sql += `  ${escapeSql(n.tldr)},\n`;
+    sql += `  ${escapeSql(n.summary)},\n`;
+    sql += `  ${escapeSql(String(n.createdAt))}\n`;
+    sql += `);\n\n`;
+  });
+
+  return sql;
+}
+
+export function generateParquetData(notes: Note[]): string {
+  // Tabular Schema JSON dataset format compatible with Apache Parquet / PyArrow / Pandas
+  const dataset = {
+    schema: {
+      columns: [
+        { name: "id", type: "int64" },
+        { name: "url", type: "string" },
+        { name: "title", type: "string" },
+        { name: "domain", type: "string" },
+        { name: "word_count", type: "int32" },
+        { name: "reading_time", type: "int32" },
+        { name: "difficulty", type: "string" },
+        { name: "tldr", type: "string" },
+        { name: "summary", type: "string" },
+        { name: "created_at", type: "timestamp" },
+      ],
+    },
+    rows: notes.map((n) => ({
+      id: n.id,
+      url: n.url,
+      title: n.title,
+      domain: n.domainName || "",
+      word_count: n.wordCount,
+      reading_time: n.readingTime,
+      difficulty: n.difficulty || "",
+      tldr: n.tldr || "",
+      summary: n.summary,
+      created_at: n.createdAt,
+    })),
+  };
+
+  return JSON.stringify(dataset, null, 2);
+}
+
+export function generateJSONL(notes: Note[]): string {
+  return notes
+    .map((n) =>
+      JSON.stringify({
+        prompt: `Summarize and analyze the article titled "${n.title}" from ${n.url}`,
+        completion: n.summary,
+        metadata: {
+          id: n.id,
+          title: n.title,
+          url: n.url,
+          tldr: n.tldr,
+          domain: n.domainName,
+          wordCount: n.wordCount,
+          readingTime: n.readingTime,
+          difficulty: n.difficulty,
+        },
+      })
+    )
+    .join("\n");
 }
 
 export function downloadFile(filename: string, content: string, type: string) {
