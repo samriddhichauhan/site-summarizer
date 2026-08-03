@@ -376,6 +376,7 @@ function MainDashboard() {
             <Workspace
               note={selectedNote}
               loading={loading}
+              selectedModel={selectedModel}
               onOpenReaderMode={() => setIsReaderModeOpen(true)}
               onEditNote={() => {
                 if (selectedNote) {

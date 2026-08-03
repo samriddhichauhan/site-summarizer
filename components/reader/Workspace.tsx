@@ -4,10 +4,12 @@ import React, { useState } from "react";
 import { Note } from "@/types/note";
 import { generatePDF, generateMarkdown, downloadFile, parseJsonArray } from "@/lib/utils";
 import { useToast } from "../ui/Toast";
+import { ChatPanel } from "../chat/ChatPanel";
 
 interface WorkspaceProps {
   note: Note | null;
   loading: boolean;
+  selectedModel: string;
   onOpenReaderMode: () => void;
   onEditNote: () => void;
 }
@@ -15,10 +17,11 @@ interface WorkspaceProps {
 export function Workspace({
   note,
   loading,
+  selectedModel,
   onOpenReaderMode,
   onEditNote,
 }: WorkspaceProps) {
-  const [viewMode, setViewMode] = useState<"summary" | "content">("summary");
+  const [viewMode, setViewMode] = useState<"summary" | "content" | "chat">("summary");
   const { toast } = useToast();
 
   if (loading) {
@@ -46,7 +49,7 @@ export function Workspace({
         </div>
         <h3 className="text-xl font-bold text-white tracking-tight">Summary Workspace</h3>
         <p className="mt-2 max-w-md text-sm text-white/50 leading-relaxed">
-          Paste any website URL in the left sidebar to extract clean article text and generate a structured AI summary with local Ollama.
+          Paste any website URL in the left sidebar to extract clean article text, generate a structured AI summary, and chat interactively with the article.
         </p>
       </div>
     );
@@ -192,6 +195,16 @@ export function Workspace({
             >
               Full Article Content
             </button>
+            <button
+              onClick={() => setViewMode("chat")}
+              className={`rounded-xl px-4 py-2 text-xs font-semibold transition ${
+                viewMode === "chat"
+                  ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/30"
+                  : "border border-white/10 text-white/70 hover:bg-white/5"
+              }`}
+            >
+              AI Chat
+            </button>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
@@ -230,64 +243,68 @@ export function Workspace({
         </div>
 
         {/* Content Body View */}
-        <div className="rounded-2xl border border-white/10 bg-black/30 p-6 min-h-[300px]">
-          {viewMode === "summary" ? (
-            <div className="space-y-6">
-              {/* TLDR Box */}
-              {note.tldr && (
-                <div className="rounded-2xl border border-indigo-500/30 bg-indigo-950/30 p-4">
-                  <span className="text-[10px] uppercase font-bold tracking-wider text-indigo-400">
-                    TL;DR
-                  </span>
-                  <p className="mt-1 text-sm font-medium text-indigo-100 leading-relaxed">
-                    {note.tldr}
-                  </p>
-                </div>
-              )}
-
-              {/* Summary Markdown Text */}
-              <div className="whitespace-pre-wrap text-sm leading-relaxed text-slate-200 font-sans">
-                {note.summary}
-              </div>
-
-              {/* Takeaways Section */}
-              {takeaways.length > 0 && (
-                <div className="border-t border-white/10 pt-4">
-                  <h4 className="text-xs uppercase font-bold text-white/50 tracking-wider mb-2">
-                    Actionable Takeaways
-                  </h4>
-                  <ul className="space-y-1.5 text-xs text-white/80">
-                    {takeaways.map((t, idx) => (
-                      <li key={idx} className="flex items-start gap-2">
-                        <span className="text-indigo-400 font-bold">•</span>
-                        <span>{t}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
-              {/* Keywords Tag Pills */}
-              {keywords.length > 0 && (
-                <div className="flex flex-wrap items-center gap-1.5 border-t border-white/10 pt-4">
-                  <span className="text-xs text-white/40 font-medium mr-1">Tags:</span>
-                  {keywords.map((k, idx) => (
-                    <span
-                      key={idx}
-                      className="rounded-lg bg-white/5 border border-white/10 px-2.5 py-0.5 text-xs text-white/70"
-                    >
-                      #{k}
+        {viewMode === "chat" ? (
+          <ChatPanel note={note} selectedModel={selectedModel} />
+        ) : (
+          <div className="rounded-2xl border border-white/10 bg-black/30 p-6 min-h-[300px]">
+            {viewMode === "summary" ? (
+              <div className="space-y-6">
+                {/* TLDR Box */}
+                {note.tldr && (
+                  <div className="rounded-2xl border border-indigo-500/30 bg-indigo-950/30 p-4">
+                    <span className="text-[10px] uppercase font-bold tracking-wider text-indigo-400">
+                      TL;DR
                     </span>
-                  ))}
+                    <p className="mt-1 text-sm font-medium text-indigo-100 leading-relaxed">
+                      {note.tldr}
+                    </p>
+                  </div>
+                )}
+
+                {/* Summary Markdown Text */}
+                <div className="whitespace-pre-wrap text-sm leading-relaxed text-slate-200 font-sans">
+                  {note.summary}
                 </div>
-              )}
-            </div>
-          ) : (
-            <div className="whitespace-pre-wrap text-sm leading-relaxed text-slate-300 font-sans max-h-[500px] overflow-y-auto pr-2">
-              {note.content}
-            </div>
-          )}
-        </div>
+
+                {/* Takeaways Section */}
+                {takeaways.length > 0 && (
+                  <div className="border-t border-white/10 pt-4">
+                    <h4 className="text-xs uppercase font-bold text-white/50 tracking-wider mb-2">
+                      Actionable Takeaways
+                    </h4>
+                    <ul className="space-y-1.5 text-xs text-white/80">
+                      {takeaways.map((t, idx) => (
+                        <li key={idx} className="flex items-start gap-2">
+                          <span className="text-indigo-400 font-bold">•</span>
+                          <span>{t}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {/* Keywords Tag Pills */}
+                {keywords.length > 0 && (
+                  <div className="flex flex-wrap items-center gap-1.5 border-t border-white/10 pt-4">
+                    <span className="text-xs text-white/40 font-medium mr-1">Tags:</span>
+                    {keywords.map((k, idx) => (
+                      <span
+                        key={idx}
+                        className="rounded-lg bg-white/5 border border-white/10 px-2.5 py-0.5 text-xs text-white/70"
+                      >
+                        #{k}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="whitespace-pre-wrap text-sm leading-relaxed text-slate-300 font-sans max-h-[500px] overflow-y-auto pr-2">
+                {note.content}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

@@ -88,7 +88,7 @@ Respond strictly in valid JSON format matching this exact schema:
       };
     }
 
-    // Raw text format fallback if JSON was not returned properly by model
+    // Raw text format fallback
     const wordCount = calculateWordCount(content);
     const readingTime = calculateReadingTime(wordCount);
     const structuredFallback: StructuredSummary = {
@@ -113,12 +113,133 @@ Respond strictly in valid JSON format matching this exact schema:
   }
 }
 
+export async function* streamArticleChat(
+  articleContent: string,
+  articleTitle: string,
+  chatHistory: { role: string; content: string }[],
+  userMessage: string,
+  modelName?: string
+): AsyncGenerator<string, void, unknown> {
+  const modelToUse = modelName || process.env.OLLAMA_MODEL || "phi:latest";
+  const trimmedContent = articleContent.slice(0, 8000);
+
+  const formattedHistory = chatHistory.length > 0
+    ? `PREVIOUS CONVERSATION:\n${chatHistory.map((m) => `${m.role === "user" ? "User" : "Assistant"}: ${m.content}`).join("\n")}\n\n`
+    : "";
+
+  const contextPrompt = `You are a precision AI Q&A assistant. Answer the user's question accurately using ONLY facts explicitly stated in the reference article below.
+
+STRICT INSTRUCTIONS:
+1. Answer ONLY using the reference article content below.
+2. Do NOT use outside general knowledge or add unmentioned details.
+3. If the answer is not in the article, state: "Based on the provided article, I cannot find this information."
+4. Be clear, direct, and helpful using Markdown.
+
+ARTICLE TITLE:
+"${articleTitle}"
+
+ARTICLE CONTENT:
+${trimmedContent}
+
+${formattedHistory}USER QUESTION:
+${userMessage}
+
+ANSWER (based strictly on the article above):`;
+
+  try {
+    const responseStream = await ollama.chat({
+      model: modelToUse,
+      messages: [{ role: "user", content: contextPrompt }],
+      stream: true,
+      options: {
+        temperature: 0.1,
+        top_p: 0.9,
+      },
+    });
+
+    for await (const chunk of responseStream) {
+      if (chunk.message && chunk.message.content) {
+        yield chunk.message.content;
+      }
+    }
+  } catch (error) {
+    console.warn("Ollama chat stream failed or unreachable, using intelligent RAG sentence extractor fallback:", error);
+
+    const fallbackAnswer = generateIntelligentRAGFallback(articleContent, articleTitle, userMessage);
+    const tokens = fallbackAnswer.split(/(?<=\s)/);
+    for (const token of tokens) {
+      yield token;
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+  }
+}
+
+function generateIntelligentRAGFallback(content: string, title: string, question: string): string {
+  const qLower = question.toLowerCase();
+  const sentences = content
+    .split(/(?<=[.?!])\s+/)
+    .map((s) => s.trim())
+    .filter((s) => s.length > 15);
+
+  if (sentences.length === 0) {
+    return `I could not find detailed article text for "${title}".`;
+  }
+
+  // Handle common prompt chip intent patterns
+  if (qLower.includes("simple") || qLower.includes("explain")) {
+    return `### Simplified Summary\n\nBased on "${title}":\n\n${sentences.slice(0, 3).join(" ")}`;
+  }
+
+  if (qLower.includes("interview") || qLower.includes("question")) {
+    return `### Interview Questions from Article\n\n1. **What is the primary topic of this article?**\n   - ${sentences[0] || title}\n\n2. **What core point does the author emphasize?**\n   - ${sentences[1] || sentences[0]}\n\n3. **What is the key takeaway?**\n   - ${sentences[2] || sentences[0]}`;
+  }
+
+  if (qLower.includes("hindi")) {
+    return `### Article Summary\n\n**Title:** ${title}\n\n${sentences.slice(0, 3).join(" ")}`;
+  }
+
+  if (qLower.includes("exam") || qLower.includes("notes")) {
+    return `### Key Exam Notes\n\n- **Subject:** ${title}\n- **Core Concept:** ${sentences[0] || "N/A"}\n- **Key Point 1:** ${sentences[1] || "N/A"}\n- **Key Point 2:** ${sentences[2] || "N/A"}`;
+  }
+
+  if (qLower.includes("bullet") || qLower.includes("5")) {
+    const bullets = sentences.slice(0, 5);
+    return `### Key Takeaways\n\n` + bullets.map((b, i) => `${i + 1}. ${b}`).join("\n\n");
+  }
+
+  // Keyword relevance scoring against article sentences
+  const stopwords = new Set(["what", "where", "when", "which", "who", "whom", "this", "that", "there", "these", "those", "have", "from", "about", "with", "does", "give", "tell", "show"]);
+  const queryKeywords = qLower
+    .match(/\b[a-z]{3,}\b/g)
+    ?.filter((w) => !stopwords.has(w)) || [];
+
+  if (queryKeywords.length > 0) {
+    const scoredSentences = sentences.map((sentence) => {
+      const sLower = sentence.toLowerCase();
+      let score = 0;
+      queryKeywords.forEach((kw) => {
+        if (sLower.includes(kw)) score += 1;
+      });
+      return { sentence, score };
+    });
+
+    const matches = scoredSentences
+      .filter((item) => item.score > 0)
+      .sort((a, b) => b.score - a.score)
+      .map((item) => item.sentence);
+
+    if (matches.length > 0) {
+      return `### Relevant Facts from Article\n\nBased on your query regarding "${queryKeywords.join(", ")}":\n\n${matches.slice(0, 3).map((m) => `> ${m}`).join("\n\n")}`;
+    }
+  }
+
+  return `Based on "${title}":\n\n${sentences.slice(0, 3).join(" ")}`;
+}
+
 function tryParseJSONResponse(text: string): any {
   try {
-    // Attempt direct parse
     return JSON.parse(text);
   } catch {
-    // Attempt extracting JSON block from markdown ```json ... ```
     const match = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
     if (match && match[1]) {
       try {
@@ -127,8 +248,6 @@ function tryParseJSONResponse(text: string): any {
         return null;
       }
     }
-
-    // Search for first { and last }
     const firstBrace = text.indexOf("{");
     const lastBrace = text.lastIndexOf("}");
     if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
@@ -138,7 +257,6 @@ function tryParseJSONResponse(text: string): any {
         return null;
       }
     }
-
     return null;
   }
 }
@@ -183,7 +301,6 @@ function generateRuleBasedFallbackSummary(
   const wordCount = calculateWordCount(content);
   const readingTime = calculateReadingTime(wordCount);
 
-  // Extract simple keywords based on word frequency
   const words = content.toLowerCase().match(/\b[a-z]{4,}\b/g) || [];
   const freqMap: Record<string, number> = {};
   const stopWords = new Set([

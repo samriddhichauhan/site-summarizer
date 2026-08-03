@@ -8,8 +8,8 @@ datasource db {
 }
 
 model Note {
-  id           Int         @id @default(autoincrement())
-  url          String      @unique
+  id           Int           @id @default(autoincrement())
+  url          String        @unique
   title        String
   summary      String      
   tldr         String?     
@@ -17,20 +17,21 @@ model Note {
   keywords     String?     
   difficulty   String?     
   content      String
-  wordCount    Int         @default(0)
-  readingTime  Int         @default(1)
+  wordCount    Int           @default(0)
+  readingTime  Int           @default(1)
   domainName   String?
   articleImage String?
   author       String?
   publishedAt  DateTime?
-  isFavorite   Boolean     @default(false)
+  isFavorite   Boolean       @default(false)
   lastOpenedAt DateTime?
-  createdAt    DateTime    @default(now())
-  updatedAt    DateTime    @default(now()) @updatedAt
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @default(now()) @updatedAt
   
   collectionId Int?
-  collection   Collection? @relation(fields: [collectionId], references: [id], onDelete: SetNull)
-  tags         Tag[]       @relation("NoteToTag")
+  collection   Collection?   @relation(fields: [collectionId], references: [id], onDelete: SetNull)
+  tags         Tag[]         @relation("NoteToTag")
+  chatMessages ChatMessage[]
 }
 
 model Collection {
@@ -50,4 +51,13 @@ model Tag {
   color     String?  @default("#8b5cf6")
   createdAt DateTime @default(now())
   notes     Note[]   @relation("NoteToTag")
+}
+
+model ChatMessage {
+  id        Int      @id @default(autoincrement())
+  noteId    Int
+  note      Note     @relation(fields: [noteId], references: [id], onDelete: Cascade)
+  role      String   // "user" | "assistant"
+  content   String
+  createdAt DateTime @default(now())
 }
