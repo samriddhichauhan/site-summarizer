@@ -114,12 +114,12 @@ export function Header({
             >
               {models.length > 0 ? (
                 models.map((m) => (
-                  <option key={m.name} value={m.name} className="bg-slate-900 text-white">
+                  <option key={m.name} value={m.name}>
                     {m.name}
                   </option>
                 ))
               ) : (
-                <option value="phi:latest" className="bg-slate-900 text-white">
+                <option value="phi:latest">
                   phi:latest
                 </option>
               )}
