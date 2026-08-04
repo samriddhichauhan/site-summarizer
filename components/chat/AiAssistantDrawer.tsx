@@ -11,7 +11,7 @@ export function AiAssistantDrawer() {
     {
       role: "assistant",
       content:
-        "👋 Welcome to **DataForge AI Dataset Assistant**!\nAsk me questions like:\n- *'Generate SQL table schema for web datasets'* \n- *'Suggest preprocessing steps for LLM fine-tuning'* \n- *'Identify potential outliers & anomalies in web data'* \n- *'Create ML feature vectors from article summaries'*",
+        "Welcome to **DataForge AI Dataset Assistant**!\nAsk me questions like:\n- *'Generate SQL table schema for web datasets'* \n- *'Suggest preprocessing steps for LLM fine-tuning'* \n- *'Identify potential outliers & anomalies in web data'* \n- *'Create ML feature vectors from article summaries'*",
     },
   ]);
   const [loading, setLoading] = useState(false);
@@ -27,7 +27,6 @@ export function AiAssistantDrawer() {
     setLoading(true);
 
     try {
-      // Simulate intelligent dataset assistant responses
       let reply = "";
       const qLower = textToSend.toLowerCase();
 
@@ -73,7 +72,7 @@ export function AiAssistantDrawer() {
               onClick={() => handleSend(prompt)}
               className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs font-medium text-indigo-300 hover:bg-indigo-600 hover:text-white transition"
             >
-              💡 {prompt}
+              {prompt}
             </button>
           ))}
         </div>

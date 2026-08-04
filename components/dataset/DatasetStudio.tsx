@@ -21,7 +21,6 @@ export function DatasetStudio() {
     try {
       setLoading(true);
       const res = await fetch("/api/v1/clean");
-      // Fallback: list existing stored dataset records or notes
       const notesRes = await fetch("/api/notes");
       const notesData = await notesRes.json();
 
@@ -108,7 +107,7 @@ export function DatasetStudio() {
             disabled={cleanLoading || !selectedDataset}
             className="flex items-center gap-2 rounded-xl bg-purple-600 hover:bg-purple-500 px-4 py-2 text-xs font-bold text-white transition disabled:opacity-40 shadow-lg shadow-purple-500/20"
           >
-            {cleanLoading ? "Cleaning Dataset..." : "✨ Run AI Cleaning & Quality Check"}
+            {cleanLoading ? "Cleaning Dataset..." : "Run AI Cleaning & Quality Check"}
           </button>
         </div>
       </div>
@@ -151,7 +150,7 @@ export function DatasetStudio() {
               onClick={() => downloadExport(fmt)}
               className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2 text-xs font-bold text-white transition hover:bg-indigo-600 hover:border-indigo-500 shadow-md"
             >
-              <span>📥</span> {fmt.toUpperCase()}
+              Export {fmt.toUpperCase()}
             </button>
           ))}
         </div>

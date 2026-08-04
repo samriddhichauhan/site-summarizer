@@ -52,16 +52,16 @@ export function Header({
     }
   }
 
-  const tabs: { id: ActiveTabType; label: string; badge?: string }[] = [
-    { id: "overview", label: "📊 Overview" },
-    { id: "scraper", label: "⚡ Web Scraper" },
-    { id: "crawler", label: "🕷️ Domain Crawler" },
-    { id: "datasets", label: "🧹 Dataset Studio" },
-    { id: "workflows", label: "🔄 Workflows" },
-    { id: "monitoring", label: "👁️ Site Monitor" },
-    { id: "developer", label: "🔑 Developer API" },
-    { id: "integrations", label: "🔌 Integrations" },
-    { id: "assistant", label: "🤖 AI Assistant" },
+  const tabs: { id: ActiveTabType; label: string }[] = [
+    { id: "overview", label: "Overview" },
+    { id: "scraper", label: "Web Scraper" },
+    { id: "crawler", label: "Domain Crawler" },
+    { id: "datasets", label: "Dataset Studio" },
+    { id: "workflows", label: "Workflows" },
+    { id: "monitoring", label: "Site Monitor" },
+    { id: "developer", label: "Developer API" },
+    { id: "integrations", label: "Integrations" },
+    { id: "assistant", label: "AI Assistant" },
   ];
 
   return (
@@ -93,7 +93,7 @@ export function Header({
             onClick={onOpenPlayground}
             className="flex items-center gap-1.5 rounded-xl border border-indigo-500/40 bg-indigo-600/20 px-3.5 py-2 text-xs font-semibold text-indigo-300 transition hover:bg-indigo-600 hover:text-white shadow-lg shadow-indigo-500/10"
           >
-            <span>⚡</span> API Playground
+            API Playground
           </button>
 
           {/* Manage Folders Button */}
@@ -101,7 +101,7 @@ export function Header({
             onClick={onOpenCollections}
             className="flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.04] px-3.5 py-2 text-xs font-medium text-white/80 transition hover:bg-white/10 hover:text-white"
           >
-            📁 Folders
+            Folders
           </button>
 
           {/* Model Selector */}

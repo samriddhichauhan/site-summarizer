@@ -103,7 +103,7 @@ export function WorkflowBuilder() {
           </span>
           <h2 className="text-lg font-bold text-white mt-0.5">Visual Workflow Pipeline Builder</h2>
           <p className="text-xs text-white/50">
-            Connect data collection steps into an automated DAG pipeline: URL → Scrape → Clean → Summarize → Export.
+            Connect data collection steps into an automated DAG pipeline: URL {"->"} Scrape {"->"} Clean {"->"} Summarize {"->"} Export.
           </p>
         </div>
 
@@ -133,28 +133,28 @@ export function WorkflowBuilder() {
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/10 bg-black/40 p-5">
           <div className="flex h-14 w-36 flex-col items-center justify-center rounded-xl border border-indigo-500/40 bg-indigo-500/10 text-center">
             <span className="text-[10px] font-bold uppercase text-indigo-400">Step 1</span>
-            <span className="text-xs font-bold text-white">🌐 URL Scraper</span>
+            <span className="text-xs font-bold text-white">URL Scraper</span>
           </div>
 
-          <span className="text-indigo-400 font-bold text-sm">➔</span>
+          <span className="text-indigo-400 font-bold text-sm">-&gt;</span>
 
           <div className="flex h-14 w-36 flex-col items-center justify-center rounded-xl border border-purple-500/40 bg-purple-500/10 text-center">
             <span className="text-[10px] font-bold uppercase text-purple-400">Step 2</span>
-            <span className="text-xs font-bold text-white">🧹 AI Data Clean</span>
+            <span className="text-xs font-bold text-white">AI Data Clean</span>
           </div>
 
-          <span className="text-purple-400 font-bold text-sm">➔</span>
+          <span className="text-purple-400 font-bold text-sm">-&gt;</span>
 
           <div className="flex h-14 w-36 flex-col items-center justify-center rounded-xl border border-emerald-500/40 bg-emerald-500/10 text-center">
             <span className="text-[10px] font-bold uppercase text-emerald-400">Step 3</span>
-            <span className="text-xs font-bold text-white">🤖 AI Summarize</span>
+            <span className="text-xs font-bold text-white">AI Summarize</span>
           </div>
 
-          <span className="text-emerald-400 font-bold text-sm">➔</span>
+          <span className="text-emerald-400 font-bold text-sm">-&gt;</span>
 
           <div className="flex h-14 w-36 flex-col items-center justify-center rounded-xl border border-blue-500/40 bg-blue-500/10 text-center">
             <span className="text-[10px] font-bold uppercase text-blue-400">Step 4</span>
-            <span className="text-xs font-bold text-white">📥 Multi Export</span>
+            <span className="text-xs font-bold text-white">Multi Export</span>
           </div>
         </div>
 
@@ -173,7 +173,7 @@ export function WorkflowBuilder() {
             disabled={executing || !targetUrl.trim()}
             className="h-11 rounded-2xl bg-emerald-600 hover:bg-emerald-500 px-6 text-xs font-bold text-white transition disabled:opacity-40"
           >
-            {executing ? "Executing Workflow..." : "▶ Run Pipeline Workflow"}
+            {executing ? "Executing Workflow..." : "Run Pipeline Workflow"}
           </button>
         </div>
       </div>

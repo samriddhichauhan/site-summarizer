@@ -65,7 +65,7 @@ export function SiteMonitorManager() {
       const data = await res.json();
       if (data.success) {
         if (data.data?.hasChanges) {
-          toast(`⚡ Content update detected! Changes count: ${data.data.site.changesCount + 1}`, "info");
+          toast(`Content update detected! Changes count: ${data.data.site.changesCount + 1}`, "info");
         } else {
           toast("No content changes detected.", "success");
         }
@@ -154,7 +154,7 @@ export function SiteMonitorManager() {
                   onClick={() => checkSite(s.id)}
                   className="w-full rounded-xl bg-white/5 hover:bg-white/10 p-2 text-xs font-semibold text-white/80 transition"
                 >
-                  ⚡ Check For Changes Now
+                  Check For Changes Now
                 </button>
               </div>
             ))}

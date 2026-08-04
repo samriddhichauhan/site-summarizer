@@ -149,7 +149,7 @@ export function IntegrationsManager() {
                   onClick={() => testIntegration(item.id)}
                   className="w-full rounded-xl bg-indigo-600/20 border border-indigo-500/30 p-2 text-xs font-semibold text-indigo-300 hover:bg-indigo-600 hover:text-white transition"
                 >
-                  ⚡ Test Webhook Dispatch
+                  Test Webhook Dispatch
                 </button>
               </div>
             ))}
