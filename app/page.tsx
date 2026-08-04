@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { Header } from "@/components/dashboard/Header";
-import { StatsOverview } from "@/components/dashboard/StatsOverview";
+import { Header, ActiveTabType } from "@/components/dashboard/Header";
+import { DashboardMetrics } from "@/components/dashboard/DashboardMetrics";
 import { FilterBar } from "@/components/dashboard/FilterBar";
 import { NoteCard } from "@/components/notes/NoteCard";
 import { NoteEditModal } from "@/components/notes/NoteEditModal";
@@ -12,12 +12,20 @@ import { CollectionManager } from "@/components/collections/CollectionManager";
 import { DatasetBuilderModal } from "@/components/dataset/DatasetBuilderModal";
 import { DomainCrawlerModal } from "@/components/crawler/DomainCrawlerModal";
 import { StructuredExtractionModal } from "@/components/extraction/StructuredExtractionModal";
+import { ApiKeysManager } from "@/components/developer/ApiKeysManager";
+import { ApiPlaygroundModal } from "@/components/developer/ApiPlaygroundModal";
+import { DatasetStudio } from "@/components/dataset/DatasetStudio";
+import { WorkflowBuilder } from "@/components/workflow/WorkflowBuilder";
+import { SiteMonitorManager } from "@/components/monitoring/SiteMonitorManager";
+import { IntegrationsManager } from "@/components/integrations/IntegrationsManager";
+import { AiAssistantDrawer } from "@/components/chat/AiAssistantDrawer";
 import { ToastProvider, useToast } from "@/components/ui/Toast";
 import { NoteCardSkeleton } from "@/components/ui/Skeleton";
 import { Note } from "@/types/note";
 import { Collection } from "@/types/collection";
 
 function MainDashboard() {
+  const [activeTab, setActiveTab] = useState<ActiveTabType>("overview");
   const [url, setUrl] = useState("");
   const [loading, setLoading] = useState(false);
   const [notes, setNotes] = useState<Note[]>([]);
@@ -41,6 +49,7 @@ function MainDashboard() {
   const [isDatasetBuilderOpen, setIsDatasetBuilderOpen] = useState(false);
   const [isCrawlerModalOpen, setIsCrawlerModalOpen] = useState(false);
   const [isStructuredExtractionOpen, setIsStructuredExtractionOpen] = useState(false);
+  const [isPlaygroundOpen, setIsPlaygroundOpen] = useState(false);
   const [noteToEdit, setNoteToEdit] = useState<Note | null>(null);
 
   // Stats State
@@ -63,7 +72,6 @@ function MainDashboard() {
       const loadedNotes: Note[] = Array.isArray(data) ? data : [];
       setNotes(loadedNotes);
 
-      // Select first note if none selected or current selected is lost
       if (loadedNotes.length > 0 && !selectedNote) {
         setSelectedNote(loadedNotes[0]);
       }
@@ -249,143 +257,197 @@ function MainDashboard() {
   return (
     <main className="min-h-screen bg-[#0a0c10] text-slate-100 selection:bg-indigo-500 selection:text-white">
       <div className="mx-auto flex min-h-screen max-w-7xl flex-col px-4 py-6 md:px-8 lg:py-8">
-        {/* Header Component */}
+        {/* Rebranded DataForge AI SaaS Header */}
         <Header
+          activeTab={activeTab}
+          onTabChange={setActiveTab}
           selectedModel={selectedModel}
           onModelChange={setSelectedModel}
           onOpenCollections={() => setIsCollectionsModalOpen(true)}
-          onOpenDatasetBuilder={() => setIsDatasetBuilderOpen(true)}
-          onOpenCrawler={() => setIsCrawlerModalOpen(true)}
-          onOpenStructuredExtraction={() => setIsStructuredExtractionOpen(true)}
+          onOpenPlayground={() => setIsPlaygroundOpen(true)}
         />
 
-        {/* Stats Overview */}
-        <StatsOverview stats={stats} />
+        {/* Tab View Router */}
+        {activeTab === "overview" && (
+          <div className="space-y-6">
+            <DashboardMetrics stats={stats} />
+            <section className="grid flex-1 grid-cols-1 gap-6 lg:grid-cols-[400px_minmax(0,1fr)] items-start">
+              {/* Left Sidebar Pane: Scraper Input & Knowledge Base */}
+              <aside className="space-y-6 rounded-3xl border border-white/10 bg-[#0f1117] p-5 shadow-2xl">
+                <div>
+                  <div className="mb-3">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-400">
+                      AI Web Scraper
+                    </span>
+                    <h2 className="text-xl font-bold tracking-tight text-white mt-0.5">
+                      Extract & Summarize
+                    </h2>
+                    <p className="mt-1 text-xs text-white/50 leading-relaxed">
+                      Extract articles from blogs, docs, news, or Wikipedia into your dataset platform.
+                    </p>
+                  </div>
 
-        {/* Main Workspace Layout */}
-        <section className="grid flex-1 grid-cols-1 gap-6 lg:grid-cols-[400px_minmax(0,1fr)] items-start">
-          {/* Left Sidebar Pane: Scraper Input & Saved Notes */}
-          <aside className="space-y-6 rounded-3xl border border-white/10 bg-[#0f1117] p-5 shadow-2xl">
-            {/* Scraper Input Card */}
-            <div>
-              <div className="mb-3">
+                  <div className="space-y-3">
+                    <input
+                      type="url"
+                      placeholder="https://example.com/article"
+                      value={url}
+                      onChange={(e) => setUrl(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") scrapeWebsite();
+                      }}
+                      className="h-12 w-full rounded-2xl border border-white/10 bg-black/40 px-4 text-xs text-white placeholder:text-white/25 outline-none transition focus:border-indigo-500/50"
+                    />
+
+                    {collections.length > 0 && (
+                      <select
+                        value={scrapeCollectionId || ""}
+                        onChange={(e) =>
+                          setScrapeCollectionId(
+                            e.target.value ? Number(e.target.value) : null
+                          )
+                        }
+                        className="h-9 w-full rounded-xl border border-white/10 bg-black/40 px-3 text-xs text-white/70 outline-none cursor-pointer"
+                      >
+                        <option value="" className="bg-slate-900">
+                          Assign to Folder (Optional)
+                        </option>
+                        {collections.map((c) => (
+                          <option key={c.id} value={c.id} className="bg-slate-900">
+                            {c.name}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+
+                    <button
+                      onClick={scrapeWebsite}
+                      disabled={loading || !url.trim()}
+                      className="inline-flex h-12 w-full items-center justify-center rounded-2xl bg-indigo-600 hover:bg-indigo-500 px-4 text-xs font-bold text-white transition shadow-lg disabled:cursor-not-allowed disabled:bg-white/10 disabled:text-white/30"
+                    >
+                      {loading ? (
+                        <span className="flex items-center gap-2">
+                          <span className="h-4 w-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                          Extracting Web Data...
+                        </span>
+                      ) : (
+                        "Extract & Summarize Webpage"
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="border-t border-white/10 pt-5">
+                  <h3 className="mb-3 font-bold text-sm text-white">
+                    Knowledge Base ({notes.length})
+                  </h3>
+
+                  <FilterBar
+                    searchTerm={searchTerm}
+                    onSearchChange={setSearchTerm}
+                    isSemantic={isSemantic}
+                    onToggleSemantic={() => setIsSemantic(!isSemantic)}
+                    selectedCollectionId={selectedCollectionId}
+                    onCollectionChange={setSelectedCollectionId}
+                    collections={collections}
+                    onlyFavorites={onlyFavorites}
+                    onToggleFavorites={() => setOnlyFavorites(!onlyFavorites)}
+                    sortBy={sortBy}
+                    onSortChange={setSortBy}
+                  />
+
+                  <div className="max-h-[400px] space-y-2.5 overflow-y-auto pr-1">
+                    {notesLoading ? (
+                      <>
+                        <NoteCardSkeleton />
+                        <NoteCardSkeleton />
+                      </>
+                    ) : notes.length > 0 ? (
+                      notes.map((note) => (
+                        <NoteCard
+                          key={note.id}
+                          note={note}
+                          isSelected={selectedNote?.id === note.id}
+                          onSelect={() => setSelectedNote(note)}
+                          onDelete={() => deleteNote(note.id)}
+                          onToggleFavorite={() => toggleFavorite(note.id)}
+                          onEdit={() => {
+                            setNoteToEdit(note);
+                            setIsEditModalOpen(true);
+                          }}
+                        />
+                      ))
+                    ) : (
+                      <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.01] p-6 text-center text-xs text-white/40">
+                        No articles found matching filters.
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </aside>
+
+              {/* Right Workspace Pane */}
+              <section className="sticky top-6">
+                <Workspace
+                  note={selectedNote}
+                  loading={loading}
+                  selectedModel={selectedModel}
+                  onOpenReaderMode={() => setIsReaderModeOpen(true)}
+                  onEditNote={() => {
+                    if (selectedNote) {
+                      setNoteToEdit(selectedNote);
+                      setIsEditModalOpen(true);
+                    }
+                  }}
+                />
+              </section>
+            </section>
+          </div>
+        )}
+
+        {activeTab === "scraper" && (
+          <section className="grid flex-1 grid-cols-1 gap-6 lg:grid-cols-[400px_minmax(0,1fr)] items-start">
+            <aside className="space-y-6 rounded-3xl border border-white/10 bg-[#0f1117] p-5 shadow-2xl">
+              <div>
                 <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-400">
-                  AI Web Scraper
+                  Dual Scraper Engine
                 </span>
                 <h2 className="text-xl font-bold tracking-tight text-white mt-0.5">
-                  Summarize Webpages
+                  Web Content Scraper
                 </h2>
                 <p className="mt-1 text-xs text-white/50 leading-relaxed">
-                  Extract articles from blogs, docs, news, or Wikipedia into your knowledge base.
+                  Support for SPA frameworks (React, Vue, Next.js), screenshots, and Readability extraction.
                 </p>
               </div>
 
               <div className="space-y-3">
-                <div>
-                  <input
-                    type="url"
-                    placeholder="https://example.com/article"
-                    value={url}
-                    onChange={(e) => setUrl(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") scrapeWebsite();
-                    }}
-                    className="h-12 w-full rounded-2xl border border-white/10 bg-black/40 px-4 text-xs text-white placeholder:text-white/25 outline-none transition focus:border-indigo-500/50 focus:bg-black/60"
-                  />
-                </div>
-
-                {collections.length > 0 && (
-                  <div>
-                    <select
-                      value={scrapeCollectionId || ""}
-                      onChange={(e) =>
-                        setScrapeCollectionId(
-                          e.target.value ? Number(e.target.value) : null
-                        )
-                      }
-                      className="h-9 w-full rounded-xl border border-white/10 bg-black/40 px-3 text-xs text-white/70 outline-none cursor-pointer"
-                    >
-                      <option value="" className="bg-slate-900">
-                        Assign to Folder (Optional)
-                      </option>
-                      {collections.map((c) => (
-                        <option key={c.id} value={c.id} className="bg-slate-900">
-                          {c.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                )}
+                <input
+                  type="url"
+                  placeholder="https://example.com"
+                  value={url}
+                  onChange={(e) => setUrl(e.target.value)}
+                  className="h-12 w-full rounded-2xl border border-white/10 bg-black/40 px-4 text-xs text-white outline-none"
+                />
 
                 <button
                   onClick={scrapeWebsite}
                   disabled={loading || !url.trim()}
-                  className="inline-flex h-12 w-full items-center justify-center rounded-2xl bg-indigo-600 hover:bg-indigo-500 px-4 text-xs font-bold text-white transition shadow-lg disabled:cursor-not-allowed disabled:bg-white/10 disabled:text-white/30"
+                  className="h-12 w-full rounded-2xl bg-indigo-600 hover:bg-indigo-500 font-bold text-xs text-white transition shadow-lg disabled:opacity-40"
                 >
-                  {loading ? (
-                    <span className="flex items-center gap-2">
-                      <span className="h-4 w-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
-                      Analyzing Page...
-                    </span>
-                  ) : (
-                    "Extract & Summarize Article"
-                  )}
+                  {loading ? "Scraping..." : "Scrape & Extract Page"}
                 </button>
               </div>
-            </div>
 
-            {/* Saved Articles List & Search Section */}
-            <div className="border-t border-white/10 pt-5">
-              <h3 className="mb-3 font-bold text-sm text-white">
-                Knowledge Library ({notes.length})
-              </h3>
-
-              <FilterBar
-                searchTerm={searchTerm}
-                onSearchChange={setSearchTerm}
-                isSemantic={isSemantic}
-                onToggleSemantic={() => setIsSemantic(!isSemantic)}
-                selectedCollectionId={selectedCollectionId}
-                onCollectionChange={setSelectedCollectionId}
-                collections={collections}
-                onlyFavorites={onlyFavorites}
-                onToggleFavorites={() => setOnlyFavorites(!onlyFavorites)}
-                sortBy={sortBy}
-                onSortChange={setSortBy}
-              />
-
-              <div className="max-h-[420px] space-y-2.5 overflow-y-auto pr-1">
-                {notesLoading ? (
-                  <>
-                    <NoteCardSkeleton />
-                    <NoteCardSkeleton />
-                  </>
-                ) : notes.length > 0 ? (
-                  notes.map((note) => (
-                    <NoteCard
-                      key={note.id}
-                      note={note}
-                      isSelected={selectedNote?.id === note.id}
-                      onSelect={() => setSelectedNote(note)}
-                      onDelete={() => deleteNote(note.id)}
-                      onToggleFavorite={() => toggleFavorite(note.id)}
-                      onEdit={() => {
-                        setNoteToEdit(note);
-                        setIsEditModalOpen(true);
-                      }}
-                    />
-                  ))
-                ) : (
-                  <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.01] p-6 text-center text-xs text-white/40">
-                    No articles found matching filters.
-                  </div>
-                )}
+              <div className="border-t border-white/10 pt-4">
+                <button
+                  onClick={() => setIsStructuredExtractionOpen(true)}
+                  className="w-full rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-xs font-bold text-emerald-400 hover:bg-emerald-500 hover:text-white transition"
+                >
+                  ✨ Custom AI Schema Extraction
+                </button>
               </div>
-            </div>
-          </aside>
+            </aside>
 
-          {/* Right Pane: Reading & Summary Workspace */}
-          <section className="sticky top-6">
             <Workspace
               note={selectedNote}
               loading={loading}
@@ -399,15 +461,46 @@ function MainDashboard() {
               }}
             />
           </section>
-        </section>
+        )}
+
+        {activeTab === "crawler" && (
+          <div className="space-y-6">
+            <div className="flex items-center justify-between rounded-3xl border border-white/10 bg-[#0f1117] p-6 shadow-xl">
+              <div>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-purple-400">
+                  Domain Crawler
+                </span>
+                <h2 className="text-xl font-bold text-white mt-0.5">Recursive Website Crawler Engine</h2>
+                <p className="text-xs text-white/50">
+                  Crawl entire websites, discover internal domain URLs, and save structured articles.
+                </p>
+              </div>
+              <button
+                onClick={() => setIsCrawlerModalOpen(true)}
+                className="rounded-2xl bg-purple-600 hover:bg-purple-500 px-5 py-3 text-xs font-bold text-white transition shadow-lg shadow-purple-600/20"
+              >
+                Launch Website Crawl
+              </button>
+            </div>
+          </div>
+        )}
+
+        {activeTab === "datasets" && <DatasetStudio />}
+
+        {activeTab === "workflows" && <WorkflowBuilder />}
+
+        {activeTab === "monitoring" && <SiteMonitorManager />}
+
+        {activeTab === "developer" && <ApiKeysManager />}
+
+        {activeTab === "integrations" && <IntegrationsManager />}
+
+        {activeTab === "assistant" && <AiAssistantDrawer />}
       </div>
 
       {/* Reader Mode Full Overlay */}
       {isReaderModeOpen && selectedNote && (
-        <ReaderMode
-          note={selectedNote}
-          onClose={() => setIsReaderModeOpen(false)}
-        />
+        <ReaderMode note={selectedNote} onClose={() => setIsReaderModeOpen(false)} />
       )}
 
       {/* Edit Note Modal */}
@@ -455,6 +548,12 @@ function MainDashboard() {
         isOpen={isStructuredExtractionOpen}
         onClose={() => setIsStructuredExtractionOpen(false)}
         selectedModel={selectedModel}
+      />
+
+      {/* Developer API Playground Modal */}
+      <ApiPlaygroundModal
+        isOpen={isPlaygroundOpen}
+        onClose={() => setIsPlaygroundOpen(false)}
       />
     </main>
   );

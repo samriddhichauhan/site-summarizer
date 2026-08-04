@@ -63,3 +63,117 @@ model ChatMessage {
   content   String
   createdAt DateTime @default(now())
 }
+
+// --- DataForge AI Platform Models ---
+
+model ApiKey {
+  id            Int        @id @default(autoincrement())
+  name          String
+  key           String     @unique
+  rateLimit     Int        @default(60) // Requests per minute
+  totalRequests Int        @default(0)
+  isActive      Boolean    @default(true)
+  lastUsedAt    DateTime?
+  createdAt     DateTime   @default(now())
+  logs          ApiLog[]
+}
+
+model ApiLog {
+  id             Int      @id @default(autoincrement())
+  apiKeyId       Int?
+  apiKey         ApiKey?  @relation(fields: [apiKeyId], references: [id], onDelete: Cascade)
+  endpoint       String
+  method         String
+  statusCode     Int
+  responseTimeMs Int
+  ipAddress      String?
+  createdAt      DateTime @default(now())
+}
+
+model CrawlJobRecord {
+  id              Int      @id @default(autoincrement())
+  jobId           String   @unique
+  seedUrl         String
+  domain          String
+  status          String   @default("idle") // idle | crawling | paused | completed | failed | canceled
+  maxPages        Int      @default(50)
+  maxDepth        Int      @default(3)
+  visitedCount    Int      @default(0)
+  progressPercent Float    @default(0)
+  queueData       String?  // JSON stringified queue array
+  visitedData     String?  // JSON stringified visited URLs set
+  crawledData     String?  // JSON stringified list of extracted articles
+  errorsData      String?  // JSON stringified errors log
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @default(now()) @updatedAt
+}
+
+model MonitoredSite {
+  id             Int            @id @default(autoincrement())
+  url            String         @unique
+  name           String
+  frequencyHours Int            @default(24) // Check interval in hours
+  lastCheckedAt  DateTime?
+  lastHash       String?
+  status         String         @default("active") // active | paused | alert
+  changesCount   Int            @default(0)
+  createdAt      DateTime       @default(now())
+  snapshots      SiteSnapshot[]
+}
+
+model SiteSnapshot {
+  id           Int           @id @default(autoincrement())
+  siteId       Int
+  site         MonitoredSite @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  contentHash  String
+  rawText      String
+  diffSummary  String?
+  hasChanges   Boolean       @default(false)
+  snapshotAt   DateTime      @default(now())
+}
+
+model WorkflowPipeline {
+  id          Int                 @id @default(autoincrement())
+  name        String
+  description String?
+  nodesJson   String              // JSON stringified workflow nodes
+  edgesJson   String              // JSON stringified workflow edges
+  isActive    Boolean             @default(true)
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @default(now()) @updatedAt
+  executions  WorkflowExecution[]
+}
+
+model WorkflowExecution {
+  id          Int              @id @default(autoincrement())
+  pipelineId  Int
+  pipeline    WorkflowPipeline @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
+  status      String           @default("running") // running | success | failed
+  logsJson    String?          // JSON logs
+  outputData  String?          // JSON final result
+  startedAt   DateTime         @default(now())
+  completedAt DateTime?
+}
+
+model DatasetRecord {
+  id           Int      @id @default(autoincrement())
+  name         String
+  description  String?
+  format       String   @default("json") // json | csv | parquet | jsonl | sql
+  rowCount     Int      @default(0)
+  qualityScore Float    @default(100.0)
+  dataJson     String   // JSON stringified rows
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @default(now()) @updatedAt
+}
+
+model IntegrationConfig {
+  id          Int      @id @default(autoincrement())
+  name        String
+  provider    String   // notion | webhook | slack | airtable | googlesheets | postgres | mongodb
+  configJson  String   // JSON auth credentials / webhook URLs
+  isEnabled   Boolean  @default(true)
+  lastSyncAt  DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @default(now()) @updatedAt
+}
