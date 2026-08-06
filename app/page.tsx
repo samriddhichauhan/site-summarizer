@@ -485,7 +485,9 @@ function MainDashboard() {
           </div>
         )}
 
-        {activeTab === "datasets" && <DatasetStudio />}
+        {activeTab === "datasets" && (
+          <DatasetStudio onOpenDatasetBuilder={() => setIsDatasetBuilderOpen(true)} />
+        )}
 
         {activeTab === "workflows" && <WorkflowBuilder />}
 

@@ -60,3 +60,49 @@ export async function POST(req: Request) {
     );
   }
 }
+
+export async function GET(req: Request) {
+  const auth = await checkApiKeyAndRateLimit(req, "/api/v1/clean");
+  if (auth.errorResponse) return auth.errorResponse;
+
+  try {
+    const datasets = await CleanerService.listDatasets();
+    await ApiKeyService.logRequest(auth.apiKeyId, "/api/v1/clean", "GET", 200, Date.now() - auth.startTime);
+    return NextResponse.json({ success: true, datasets });
+  } catch (error: any) {
+    await ApiKeyService.logRequest(auth.apiKeyId, "/api/v1/clean", "GET", 500, Date.now() - auth.startTime);
+    return NextResponse.json(
+      { success: false, message: error?.message || "Failed to list datasets." },
+      { status: 500 }
+    );
+  }
+}
+
+export async function DELETE(req: Request) {
+  const auth = await checkApiKeyAndRateLimit(req, "/api/v1/clean");
+  if (auth.errorResponse) return auth.errorResponse;
+
+  try {
+    const { searchParams } = new URL(req.url);
+    const id = Number(searchParams.get("id"));
+
+    if (!id || isNaN(id)) {
+      await ApiKeyService.logRequest(auth.apiKeyId, "/api/v1/clean", "DELETE", 400, Date.now() - auth.startTime);
+      return NextResponse.json(
+        { success: false, message: "Valid dataset ID is required." },
+        { status: 400 }
+      );
+    }
+
+    await CleanerService.deleteDataset(id);
+    await ApiKeyService.logRequest(auth.apiKeyId, "/api/v1/clean", "DELETE", 200, Date.now() - auth.startTime);
+    return NextResponse.json({ success: true, message: "Dataset deleted successfully." });
+  } catch (error: any) {
+    await ApiKeyService.logRequest(auth.apiKeyId, "/api/v1/clean", "DELETE", 500, Date.now() - auth.startTime);
+    return NextResponse.json(
+      { success: false, message: error?.message || "Failed to delete dataset." },
+      { status: 500 }
+    );
+  }
+}
+

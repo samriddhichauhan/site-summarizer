@@ -17,6 +17,7 @@
     "jspdf": "^4.2.1",
     "next": "16.2.9",
     "ollama": "^0.6.3",
+    "playwright": "^1.62.1",
     "prisma": "^6.19.3",
     "react": "19.2.4",
     "react-dom": "19.2.4"

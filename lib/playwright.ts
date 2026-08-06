@@ -1,5 +1,5 @@
 import { ScrapeOptions, ScrapeResult } from "@/types/scraper";
-import { scrapeUrl as standardScrapeUrl } from "@/lib/scraper";
+import { scrapeUrl as standardScrapeUrl, parseHtmlContent } from "@/lib/scraper";
 
 export interface AdvancedScrapeOptions extends ScrapeOptions {
   useDynamicBrowser?: boolean;
@@ -24,7 +24,15 @@ export async function scrapeUrlAdvanced(
       if (chromium) {
         const browser = await chromium.launch({
           headless: true,
-          args: ["--no-sandbox", "--disable-setuid-sandbox"],
+          args: [
+            "--no-sandbox",
+            "--disable-setuid-sandbox",
+            "--disable-dev-shm-usage",
+            "--disable-gpu",
+            "--no-first-run",
+            "--no-zygote",
+            "--single-process",
+          ],
         });
 
         const context = await browser.newContext({
@@ -38,7 +46,18 @@ export async function scrapeUrlAdvanced(
         }
 
         const page = await context.newPage();
-        await page.goto(urlStr, { waitUntil: "domcontentloaded", timeout: options.timeoutMs || 30000 });
+
+        // Block heavy resources (images, media, fonts) to speed up loading significantly
+        await page.route("**/*", (route: any) => {
+          const type = route.request().resourceType();
+          if (["image", "media", "font"].includes(type)) {
+            route.abort();
+          } else {
+            route.continue();
+          }
+        });
+
+        await page.goto(urlStr, { waitUntil: "networkidle", timeout: options.timeoutMs || 30000 });
 
         if (options.waitForSelector) {
           try {
@@ -55,6 +74,8 @@ export async function scrapeUrlAdvanced(
           }
         }
 
+        const renderedHtml = await page.content();
+
         let screenshotBase64: string | undefined;
         if (options.screenshot) {
           const buffer = await page.screenshot({ fullPage: false, type: "jpeg", quality: 60 });
@@ -63,9 +84,9 @@ export async function scrapeUrlAdvanced(
 
         await browser.close();
 
-        const standardResult = await standardScrapeUrl(urlStr, options);
+        const parsedResult = parseHtmlContent(renderedHtml, urlStr, options);
         return {
-          ...standardResult,
+          ...parsedResult,
           screenshotBase64,
         };
       }

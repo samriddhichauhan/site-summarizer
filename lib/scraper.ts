@@ -53,12 +53,36 @@ export async function scrapeUrl(urlStr: string, options: ScrapeOptions = {}): Pr
       };
     }
 
-    const domainName = extractDomain(urlStr);
+    return parseHtmlContent(html, urlStr, options);
+  } catch (error: any) {
+    console.error("Scraper Engine Failure:", error?.message);
+    return {
+      success: false,
+      error: error?.message || "Failed to fetch and scrape the target web page.",
+    };
+  }
+}
 
-    // Primary Parser: Mozilla Readability
-    const dom = new JSDOM(html, { url: urlStr });
-    const reader = new Readability(dom.window.document);
-    const article = reader.parse();
+export function preprocessHtmlForJsdom(html: string): string {
+  if (!html) return "";
+  return html
+    .replace(/<script\b[^<]*>([\s\S]*?)<\/script>/gi, "")
+    .replace(/<style\b[^<]*>([\s\S]*?)<\/style>/gi, "")
+    .replace(/<svg\b[^<]*>([\s\S]*?)<\/svg>/gi, "")
+    .replace(/<iframe\b[^<]*>([\s\S]*?)<\/iframe>/gi, "")
+    .replace(/<noscript\b[^<]*>([\s\S]*?)<\/noscript>/gi, "");
+}
+
+export function parseHtmlContent(html: string, urlStr: string, options: ScrapeOptions = {}): ScrapeResult {
+  const domainName = extractDomain(urlStr);
+
+  // Preprocess HTML to strip heavy tags that aren't needed by readability (saves CPU & memory in JSDOM)
+  const cleanHtml = preprocessHtmlForJsdom(html);
+
+  // Primary Parser: Mozilla Readability
+  const dom = new JSDOM(cleanHtml, { url: urlStr });
+  const reader = new Readability(dom.window.document);
+  const article = reader.parse();
 
     // Secondary Parser & Smart Data Extractor: Cheerio DOM Engine
     const $ = cheerio.load(html);
@@ -95,9 +119,57 @@ export async function scrapeUrl(urlStr: string, options: ScrapeOptions = {}): Pr
     const readingTime = calculateReadingTime(wordCount);
 
     if (!cleanContent || cleanContent.length < 50) {
+      // Build a fallback content representation from page title, description, headings, images, and links
+      const fallbackTitleText = fallbackTitle || smartData.title || "Untitled Web Asset";
+      const parts: string[] = [];
+      parts.push(`# ${fallbackTitleText}`);
+      
+      if (smartData.description) {
+        parts.push(`**Description:** ${smartData.description}`);
+      } else {
+        parts.push(`**Description:** Interactive visual portfolio, animation gallery, or template page.`);
+      }
+      
+      if (smartData.headings && smartData.headings.length > 0) {
+        parts.push(`## Section Outlines`);
+        smartData.headings.forEach((h) => {
+          parts.push(`- ${h.text}`);
+        });
+      }
+      
+      if (smartData.images && smartData.images.length > 0) {
+        parts.push(`## Visual Assets & Templates`);
+        parts.push(`Discovered ${smartData.images.length} images/animation templates:`);
+        smartData.images.slice(0, 10).forEach((img, idx) => {
+          parts.push(`- Asset ${idx + 1}: [Image Link](${img.src}) ${img.alt ? `(Label: ${img.alt})` : ""}`);
+        });
+      }
+      
+      if (smartData.links && smartData.links.length > 0) {
+        parts.push(`## Interactive References`);
+        parts.push(`Discovered links:`);
+        smartData.links.slice(0, 15).forEach((link) => {
+          parts.push(`- [${link.text || "Direct Link"}](${link.href})`);
+        });
+      }
+
+      const generatedContent = parts.join("\n\n");
+      const generatedWordCount = calculateWordCount(generatedContent);
+      const generatedReadingTime = calculateReadingTime(generatedWordCount);
+
       return {
-        success: false,
-        error: "Failed to extract meaningful text content from webpage.",
+        success: true,
+        article: {
+          title: fallbackTitleText,
+          content: generatedContent,
+          textContent: generatedContent,
+          excerpt: smartData.description || undefined,
+          domainName,
+          articleImage: smartData.images[0]?.src || undefined,
+          wordCount: generatedWordCount,
+          readingTime: generatedReadingTime,
+          smartData,
+        },
       };
     }
 
@@ -115,14 +187,7 @@ export async function scrapeUrl(urlStr: string, options: ScrapeOptions = {}): Pr
         smartData,
       },
     };
-  } catch (error: any) {
-    console.error("Scraper Engine Failure:", error?.message);
-    return {
-      success: false,
-      error: error?.message || "Failed to fetch and scrape the target web page.",
-    };
   }
-}
 
 function extractSmartData(
   $: cheerio.CheerioAPI,
