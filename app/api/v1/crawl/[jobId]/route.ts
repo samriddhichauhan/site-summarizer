@@ -14,7 +14,7 @@ export async function GET(
       );
     }
 
-    const job = CrawlerService.getJobStatus(jobId);
+    const job = await CrawlerService.getJobStatus(jobId);
     if (!job) {
       return NextResponse.json(
         { success: false, message: "Crawl job not found or expired." },

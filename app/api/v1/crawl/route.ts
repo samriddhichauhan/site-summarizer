@@ -12,7 +12,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const job = CrawlerService.startCrawl(
+    const job = await CrawlerService.startCrawl(
       url,
       maxPages ? Number(maxPages) : 50,
       collectionId ? Number(collectionId) : undefined,

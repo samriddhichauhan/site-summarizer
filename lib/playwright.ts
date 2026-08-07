@@ -47,10 +47,22 @@ export async function scrapeUrlAdvanced(
 
         const page = await context.newPage();
 
-        // Block heavy resources (images, media, fonts) to speed up loading significantly
+        // Block heavy resources and tracking/analytics domains to load pages much faster
         await page.route("**/*", (route: any) => {
           const type = route.request().resourceType();
-          if (["image", "media", "font"].includes(type)) {
+          const url = route.request().url().toLowerCase();
+          const isTrackingOrAnalytics =
+            url.includes("google-analytics") ||
+            url.includes("analytics.js") ||
+            url.includes("gtm.js") ||
+            url.includes("doubleclick") ||
+            url.includes("facebook.net") ||
+            url.includes("pixel") ||
+            url.includes("mixpanel") ||
+            url.includes("amplitude") ||
+            url.includes("hotjar");
+
+          if (["image", "media", "font"].includes(type) || isTrackingOrAnalytics) {
             route.abort();
           } else {
             route.continue();

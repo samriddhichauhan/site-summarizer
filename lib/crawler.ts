@@ -3,6 +3,7 @@ import { extractDomain } from "./utils";
 import { ScraperService } from "@/services/scraper.service";
 import { SummaryService } from "@/services/summary.service";
 import { NoteService } from "@/services/note.service";
+import { prisma } from "@/lib/prisma";
 
 export interface CrawlJobStatus {
   jobId: string;
@@ -29,7 +30,7 @@ class CrawlJobManager {
     model?: string;
   }> = new Map();
 
-  createJob(seedUrl: string, maxPages: number = 50, collectionId?: number, model?: string): CrawlJobStatus {
+  async createJob(seedUrl: string, maxPages: number = 50, collectionId?: number, model?: string): Promise<CrawlJobStatus> {
     const jobId = `crawl_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
     const domain = extractDomain(seedUrl);
 
@@ -61,15 +62,89 @@ class CrawlJobManager {
       model,
     });
 
+    // Create database persistent record
+    try {
+      await prisma.crawlJobRecord.create({
+        data: {
+          jobId,
+          seedUrl: formattedUrl,
+          domain,
+          status: "idle",
+          maxPages: jobData.maxPages,
+          visitedCount: 0,
+          progressPercent: 0,
+          queueData: JSON.stringify([formattedUrl]),
+          visitedData: JSON.stringify([]),
+          crawledData: JSON.stringify([]),
+          errorsData: JSON.stringify([]),
+        },
+      });
+    } catch (err) {
+      console.error("Failed to create CrawlJobRecord in database:", err);
+    }
+
     // Start background processing
     this.processJob(jobId);
 
     return jobData;
   }
 
-  getJobStatus(jobId: string): CrawlJobStatus | null {
+  async getJobStatus(jobId: string): Promise<CrawlJobStatus | null> {
     const job = this.jobs.get(jobId);
-    return job ? { ...job.status } : null;
+    if (job) {
+      return { ...job.status };
+    }
+
+    // Fall back to SQLite database record (e.g. after server reload/restart)
+    try {
+      const record = await prisma.crawlJobRecord.findUnique({
+        where: { jobId },
+      });
+
+      if (record) {
+        return {
+          jobId: record.jobId,
+          seedUrl: record.seedUrl,
+          domain: record.domain,
+          status: record.status as any,
+          maxPages: record.maxPages,
+          visitedCount: record.visitedCount,
+          queueCount: record.queueData ? JSON.parse(record.queueData).length : 0,
+          remainingCount: 0,
+          progressPercent: record.progressPercent,
+          crawledPages: record.crawledData ? JSON.parse(record.crawledData) : [],
+          errors: record.errorsData ? JSON.parse(record.errorsData) : [],
+          createdAt: record.createdAt.toISOString(),
+        };
+      }
+    } catch (err) {
+      console.error("Error reading CrawlJobRecord from database:", err);
+    }
+
+    return null;
+  }
+
+  private async updateJobDatabaseState(jobId: string, job: {
+    status: CrawlJobStatus;
+    queue: string[];
+    visited: Set<string>;
+  }) {
+    try {
+      await prisma.crawlJobRecord.update({
+        where: { jobId },
+        data: {
+          status: job.status.status,
+          visitedCount: job.status.visitedCount,
+          progressPercent: job.status.progressPercent,
+          queueData: JSON.stringify(job.queue),
+          visitedData: JSON.stringify(Array.from(job.visited)),
+          crawledData: JSON.stringify(job.status.crawledPages),
+          errorsData: JSON.stringify(job.status.errors),
+        },
+      });
+    } catch (err) {
+      console.error(`Failed to update CrawlJobRecord in database for ${jobId}:`, err);
+    }
   }
 
   private async processJob(jobId: string) {
@@ -77,6 +152,7 @@ class CrawlJobManager {
     if (!job) return;
 
     job.status.status = "crawling";
+    await this.updateJobDatabaseState(jobId, job);
 
     const CONCURRENCY = 3;
     let activeWorkers = 0;
@@ -88,12 +164,15 @@ class CrawlJobManager {
       ) {
         let currentUrl: string | undefined;
 
-        // Synchronously acquire next URL to avoid duplicate work among workers
+        // Synchronously acquire next actual unvisited URL to avoid duplicate work among workers
         if (job.queue.length > 0 && job.status.visitedCount < job.status.maxPages) {
-          const next = job.queue.shift()!;
-          if (!job.visited.has(next)) {
-            currentUrl = next;
-            job.visited.add(currentUrl);
+          while (job.queue.length > 0) {
+            const next = job.queue.shift()!;
+            if (!job.visited.has(next)) {
+              currentUrl = next;
+              job.visited.add(currentUrl);
+              break;
+            }
           }
         }
 
@@ -212,6 +291,9 @@ class CrawlJobManager {
             ? Math.min(100, Math.round((job.status.visitedCount / job.status.maxPages) * 100))
             : 100;
 
+        // Persist progress to database
+        await this.updateJobDatabaseState(jobId, job);
+
         // Small delay to be polite to servers
         await new Promise((resolve) => setTimeout(resolve, 800));
       }
@@ -225,6 +307,9 @@ class CrawlJobManager {
     job.status.progressPercent = 100;
     job.status.remainingCount = 0;
     job.status.queueCount = 0;
+
+    // Persist final completion state to database
+    await this.updateJobDatabaseState(jobId, job);
   }
 }
 
